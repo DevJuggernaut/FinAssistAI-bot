@@ -130,4 +130,7 @@ class TransactionCategorizer:
             logger.info("Model updated successfully")
         except Exception as e:
             logger.error(f"Error updating model: {str(e)}")
-            raise 
+            raise
+
+# Create an instance for import
+transaction_categorizer = TransactionCategorizer()

@@ -76,16 +76,6 @@ def main():
     # Додаємо обробники команд
     application.add_handler(get_setup_handler())  # Обробник налаштування
     
-    # Додаємо обробник для початкового налаштування
-    # Використовуємо один ConversationHandler для всього процесу налаштування
-    setup_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(show_currency_selection, pattern="^setup_initial_balance$")],
-        states={
-            WAITING_CURRENCY_SELECTION: [
-                CallbackQueryHandler(process_currency_selection, pattern="^currency_"),
-                CallbackQueryHandler(callback_handler.back_to_main, pattern="^back_to_main$")
-            ],
-            WAITING_BALANCE_INPUT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, process_initial_balance),
                 CallbackQueryHandler(back_to_currency, pattern="^back_to_currency$")
             ]

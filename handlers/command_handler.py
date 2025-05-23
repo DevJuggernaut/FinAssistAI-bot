@@ -114,31 +114,39 @@ async def setup_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE
     return ConversationHandler.END
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обробка команди /help"""
+    """Обробка команди /help зі стислим описом функцій"""
     user_id = update.effective_user.id
     
     with Session() as session:
         user = session.query(User).filter(User.telegram_id == user_id).first()
-        if not user or not user.is_setup_completed:
-            await update.message.reply_text(
-                "Будь ласка, спочатку завершіть налаштування бота командою /start"
+        if not user:
+            user = User(
+                telegram_id=user_id,
+                username=update.effective_user.username,
+                first_name=update.effective_user.first_name,
+                last_name=update.effective_user.last_name,
+                is_setup_completed=True
             )
-            return
+            session.add(user)
+            session.commit()
     
     help_text = (
-        "📚 Доступні команди:\n\n"
-        "/start - почати налаштування бота\n"
-        "/help - показати це повідомлення\n"
-        "/settings - змінити налаштування\n"
-        "/balance - перевірити поточний баланс\n"
-        "/add - додати нову транзакцію\n"
-        "/stats - переглянути статистику витрат\n"
-        "/categories - керувати категоріями\n"
-        "/notifications - увімкнути/вимкнути сповіщення\n"
-        "/export - експортувати дані\n"
-        "/cancel - скасувати поточну дію"
+        "*FinAssist - Команди*\n\n"
+        "💰 *Фінанси*\n"
+        "/add - додати транзакцію\n"
+        "/balance - перевірити баланс\n"
+        "/stats - статистика витрат\n\n"
+        
+        "📊 *Аналітика*\n"
+        "/report - фінансовий звіт\n"
+        "/budget - керувати бюджетом\n"
+        "/advice - отримати поради\n\n"
+        
+        "⚙️ /settings - налаштування\n\n"
+        
+        "*Швидкий старт:* просто надішліть суму та опис (наприклад: 120 обід)"
     )
-    await update.message.reply_text(help_text)
+    await update.message.reply_text(help_text, parse_mode='Markdown')
 
 async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обробка команди /settings"""
@@ -282,10 +290,12 @@ async def budget_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 def get_setup_handler():
-    """Отримання обробника процесу налаштування"""
+    """Отримання обробника процесу налаштування (без додаткових запитань)"""
     return ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
+            # Зберігаємо стани для зворотної сумісності, 
+            # але вони не будуть використовуватися в автоматичному режимі
             SETUP_BALANCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, setup_balance)],
             SETUP_BUDGET: [MessageHandler(filters.TEXT & ~filters.COMMAND, setup_budget)],
             SETUP_NOTIFICATIONS: [CallbackQueryHandler(setup_notifications)]

@@ -1,5 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, ConversationHandler
 import os
 from datetime import datetime, timedelta
 import calendar
@@ -11,6 +11,7 @@ import uuid
 import logging
 
 from database.db_operations import get_or_create_user, get_monthly_stats, get_user_categories, get_user, get_user_transactions
+from handlers.setup_callbacks import show_currency_selection, complete_setup
 from services.financial_advisor import get_financial_advice
 from handlers.budget_callbacks import create_budget_from_recommendations, show_budget_total_input
 from services.analytics_service import analytics_service
@@ -32,10 +33,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         callback_data = query.data
         
         # Основні функції
-        if callback_data == "stats":
+        if callback_data == "stats" or callback_data == "show_stats":
             await show_stats(query, context)
         elif callback_data == "add_transaction":
             await show_add_transaction_form(query, context)
+        elif callback_data == "add_expense":
+            await add_expense(query, context)
+        elif callback_data == "add_income":
+            await add_income(query, context)
+        elif callback_data == "show_help":
+            await show_help_menu(query, context)
         elif callback_data == "categories":
             await show_categories(query, context)
         elif callback_data == "reports":
@@ -48,6 +55,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await generate_monthly_report(query, context)
         elif callback_data == "export_transactions":
             await export_transactions(query, context)
+        elif callback_data == "back_to_main":
+            await back_to_main(query, context)
+        
+        # Початкове налаштування (тепер обробляється через ConversationHandler)
+        elif callback_data == "setup_initial_balance":
+            await show_currency_selection(query, context)
+        elif callback_data == "complete_setup":
+            await complete_setup(query, context)
         
         # Бюджетування і поради
         elif callback_data == "budget":
@@ -710,34 +725,43 @@ async def show_main_menu(query, context):
     )
 
 async def show_help(query, context):
-    """Показує довідку користувачу"""
+    """Показує довідку користувачу - повний гід для новачків"""
     help_text = (
         "📚 *ДОВІДКА ПО ВИКОРИСТАННЮ*\n\n"
         
-        "🔷 *Основні команди*\n"
-        "• `/start` - Запустити бота / головне меню\n"
-        "• `/help` - Показати це повідомлення\n"
-        "• `/stats` - Моя фінансова статистика\n"
-        "• `/add` - Додати нову транзакцію\n"
-        "• `/budget` - Управління бюджетом\n"
-        "• `/report` - Згенерувати звіт\n\n"
+        "🔶 *Початкове налаштування бота*\n"
+        "1️⃣ Перейдіть у розділ 'Мій бюджет' та встановіть початковий баланс\n"
+        "2️⃣ Налаштуйте місячний бюджет витрат\n"
+        "3️⃣ Налаштуйте категорії доходів і витрат\n\n"
         
-        "🔷 *Швидке додавання транзакцій*\n"
+        "🔶 *Щоденне використання*\n"
+        "1️⃣ Регулярно додавайте фінансові операції (витрати/доходи)\n"
+        "2️⃣ Перегляньте свій бюджет та налаштуйте ліміти витрат\n"
+        "3️⃣ Переглядайте аналітику для контролю витрат\n\n"
+        
+        "🔷 *Основні функції (з головного меню)*\n"
+        "• *💰 Мій бюджет* - перегляд стану балансу, створення та редагування бюджету\n"
+        "• *➕ Додати операцію* - швидке додавання витрат/доходів різними способами\n"
+        "• *📊 Аналітика* - графіки, звіти та прогнози фінансового стану\n"
+        "• *⚙️ Налаштування* - персоналізація бота під ваші потреби\n\n"
+        
+        "🔷 *Способи додавання транзакцій*\n"
         "• 📸 Надішліть *фото чека* для автоматичного розпізнавання\n"
         "• 📎 Завантажте *банківську виписку* (.csv, .pdf, .xlsx)\n"
         "• 💬 Напишіть транзакцію текстом: `Продукти 250 грн`\n"
         "• ➕ Додавання доходу: `+Зарплата 8000 грн`\n\n"
         
-        "🔷 *Розумний помічник*\n"
-        "• ❓ Запитайте про свої фінанси: `Скільки я витратив на їжу?`\n"
-        "• 💡 Попросіть пораду: `Порадь, як заощадити на продуктах`\n\n"
+        "🔷 *AI-помічник та аналітика*\n"
+        "• ❓ Запитайте про фінанси: `Скільки я витратив на їжу цього місяця?`\n"
+        "• 💡 Попросіть пораду: `Порадь, як заощадити на продуктах`\n"
+        "• 📊 Перегляньте тенденції витрат в розділі Аналітика\n"
+        "• 📉 Отримайте прогноз майбутніх витрат на основі ваших даних\n\n"
         
-        "🔷 *Додаткові можливості*\n"
-        "• 📊 Детальна аналітика з графіками\n"
-        "• 🏷️ Налаштування власних категорій\n"
-        "• 📅 Планування бюджету\n"
-        "• 🔔 Налаштування сповіщень\n"
-        "• 📱 Експорт даних"
+        "🔷 *Корисні команди*\n"
+        "• `/start` - Головне меню бота\n"
+        "• `/help` - Показати цю довідку\n"
+        "• `/add` - Швидке додавання транзакції\n"
+        "• `/stats` - Фінансова статистика"
     )
     
     # Додаємо кнопки для швидкої навігації до основних функцій
@@ -776,7 +800,24 @@ async def show_budget_menu(query, context):
     # Отримуємо статус активного бюджету
     budget_status = budget_manager.get_budget_status()
     
-    if budget_status['status'] == 'no_active_budget':
+    # Перевіряємо, чи налаштовані початкові дані користувача
+    if user.initial_balance is None or user.monthly_budget is None:
+        # Якщо початкові дані не налаштовані, пропонуємо це зробити
+        keyboard = [
+            [
+                InlineKeyboardButton("💰 Встановити початковий баланс", callback_data="setup_initial_balance")
+            ],
+            [
+                InlineKeyboardButton("📝 Встановити місячний бюджет", callback_data="setup_monthly_budget")
+            ],
+            [
+                InlineKeyboardButton("🏷️ Налаштувати категорії витрат", callback_data="setup_categories")
+            ],
+            [
+                InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")
+            ]
+        ]
+    elif budget_status['status'] == 'no_active_budget':
         # Якщо немає активного бюджету, пропонуємо створити новий
         keyboard = [
             [
@@ -794,9 +835,21 @@ async def show_budget_menu(query, context):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(
-            "💼 *Управління бюджетом*\n\n"
-            "У вас немає активного бюджету на поточний період.\n"
+        if user.initial_balance is None or user.monthly_budget is None:
+            await query.edit_message_text(
+                "⚠️ *Необхідне початкове налаштування*\n\n"
+                "Для повноцінної роботи з ботом потрібно виконати налаштування:\n\n"
+                "1️⃣ Встановити ваш початковий фінансовий баланс\n"
+                "2️⃣ Налаштувати місячний бюджет витрат\n"
+                "3️⃣ Створити категорії для ваших фінансових операцій\n\n"
+                "Оберіть опцію нижче для налаштування бота:",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        else:
+            await query.edit_message_text(
+                "💼 *Управління бюджетом*\n\n"
+                "У вас немає активного бюджету на поточний період.\n"
             "Створіть новий бюджет для кращого контролю витрат.",
             reply_markup=reply_markup,
             parse_mode="Markdown"
@@ -1419,4 +1472,114 @@ async def show_add_income_form(query, context):
         text=text,
         reply_markup=reply_markup,
         parse_mode="Markdown"
+    )
+
+# Нові функції для обробки кнопок з привітання
+
+async def add_expense(query, context):
+    """Відображає форму додавання витрати"""
+    # Створюємо клавіатуру для вибору категорії витрат
+    from database.db_operations import get_user_categories
+    
+    user = get_user(query.from_user.id)
+    expense_categories = get_user_categories(user.id, 'expense')
+    
+    keyboard = []
+    row = []
+    for i, category in enumerate(expense_categories):
+        row.append(InlineKeyboardButton(f"{category.icon} {category.name}", callback_data=f"select_expense_category_{category.id}"))
+        if (i + 1) % 2 == 0 or i == len(expense_categories) - 1:
+            keyboard.append(row)
+            row = []
+    
+    keyboard.append([InlineKeyboardButton("« Назад", callback_data="back_to_main")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        "💸 *Додавання витрати*\n\n"
+        "Оберіть категорію витрати:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+async def add_income(query, context):
+    """Відображає форму додавання доходу"""
+    # Створюємо клавіатуру для вибору категорії доходу
+    from database.db_operations import get_user_categories
+    
+    user = get_user(query.from_user.id)
+    income_categories = get_user_categories(user.id, 'income')
+    
+    keyboard = []
+    row = []
+    for i, category in enumerate(income_categories):
+        row.append(InlineKeyboardButton(f"{category.icon} {category.name}", callback_data=f"select_income_category_{category.id}"))
+        if (i + 1) % 2 == 0 or i == len(income_categories) - 1:
+            keyboard.append(row)
+            row = []
+    
+    keyboard.append([InlineKeyboardButton("« Назад", callback_data="back_to_main")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        "💰 *Додавання доходу*\n\n"
+        "Оберіть категорію доходу:",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+async def show_help_menu(query, context):
+    """Показує меню з доступними командами і розділами довідки"""
+    keyboard = [
+        [
+            InlineKeyboardButton("🚀 Перші кроки", callback_data="help_getting_started"),
+            InlineKeyboardButton("💸 Управління фінансами", callback_data="help_transactions")
+        ],
+        [
+            InlineKeyboardButton("📊 Аналітика та звіти", callback_data="help_stats"),
+            InlineKeyboardButton("🔮 AI-помічник", callback_data="help_ai")
+        ],
+        [
+            InlineKeyboardButton("📱 Всі команди бота", callback_data="help_commands"),
+            InlineKeyboardButton("🔍 Поширені питання", callback_data="help_faq")
+        ],
+        [InlineKeyboardButton("« Назад", callback_data="back_to_main")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        "📚 *Довідка по використанню FinAssist*\n\n"
+        "Бот допоможе вам відстежувати витрати, планувати бюджет та аналізувати фінанси.\n\n"
+        "🔸 *Потрібна швидка допомога?* — виберіть розділ нижче\n"
+        "🔸 *Початок роботи* — додайте свою першу транзакцію через '➕ Додати операцію'\n"
+        "🔸 *Щоденне використання* — регулярно додавайте витрати для точного аналізу\n",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+async def back_to_main(query, context):
+    """Повернення до головного меню"""
+    keyboard = [
+        [
+            InlineKeyboardButton("💰 Мій бюджет", callback_data="budget"),
+            InlineKeyboardButton("➕ Додати операцію", callback_data="add_transaction")
+        ],
+        [
+            InlineKeyboardButton("📊 Аналітика", callback_data="reports"),
+            InlineKeyboardButton("⚙️ Налаштування", callback_data="settings")
+        ],
+        [
+            InlineKeyboardButton("❓ Допомога", callback_data="help")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Отримуємо ім'я користувача
+    first_name = query.from_user.first_name or "друже"
+    
+    await query.edit_message_text(
+        f"👋 *З поверненням, {first_name}!*\n\n"
+        "Ваш особистий фінансовий помічник готовий до роботи.",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
     )

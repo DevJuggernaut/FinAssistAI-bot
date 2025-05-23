@@ -1,0 +1,489 @@
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes, ConversationHandler
+from database.db_operations import get_user, get_or_create_user, get_user_categories
+from database.session import Session
+from database.models import User, Category, TransactionType, Transaction
+from datetime import datetime
+
+# Стани для ConversationHandler
+WAITING_CURRENCY_SELECTION = 1
+WAITING_BALANCE_INPUT = 2
+SETUP_COMPLETE = 3
+
+async def show_currency_selection(query, context):
+    """Починає процес початкового налаштування бота - крок 1: вибір валюти"""
+    # Встановлюємо перший крок налаштування
+    context.user_data['setup_step'] = 'currency'
+    
+    # Створюємо кнопки для вибору валюти
+    keyboard = [
+        [
+            InlineKeyboardButton("🇺🇦 UAH (₴)", callback_data="currency_UAH"),
+            InlineKeyboardButton("🇺🇸 USD ($)", callback_data="currency_USD")
+        ],
+        [
+            InlineKeyboardButton("🇪🇺 EUR (€)", callback_data="currency_EUR"),
+            InlineKeyboardButton("🇬🇧 GBP (£)", callback_data="currency_GBP")
+        ],
+        [
+            InlineKeyboardButton("« Скасувати", callback_data="back_to_main")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    message_text = (
+        "🚀 *Налаштування бота - Крок 1 з 2*\n\n"
+        "💱 *Оберіть основну валюту*\n\n"
+        "Ця валюта буде використовуватись для відображення балансу та операцій.\n"
+        "Оберіть валюту, в якій ви зазвичай ведете облік фінансів:"
+    )
+    
+    message = await query.edit_message_text(
+        message_text, 
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    
+    context.user_data['message_id'] = message.message_id
+    
+    return WAITING_CURRENCY_SELECTION
+
+async def process_currency_selection(query, context):
+    """Обробка вибору валюти"""
+    # Отримуємо вибрану валюту
+    currency_code = query.data.split("_")[1]
+    user_id = query.from_user.id
+    
+    with Session() as session:
+        user = session.query(User).filter(User.telegram_id == user_id).first()
+        user.currency = currency_code
+        session.commit()
+    
+    # Тепер переходимо до кроку введення балансу
+    keyboard = [[InlineKeyboardButton("« Назад", callback_data="back_to_currency")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Отримуємо символ валюти для відображення
+    currency_symbols = {
+        "UAH": "₴",
+        "USD": "$",
+        "EUR": "€",
+        "GBP": "£"
+    }
+    currency_symbol = currency_symbols.get(currency_code, currency_code)
+    
+    message_text = (
+        "🚀 *Налаштування бота - Крок 2 з 2*\n\n"
+        f"✅ Валюта встановлена: {currency_code} ({currency_symbol})\n\n"
+        "💰 *Введіть ваш початковий баланс*\n\n"
+        f"Вкажіть суму коштів, яку ви маєте зараз (наприклад: 5000).\n"
+        "Це допоможе нам правильно відстежувати ваші фінанси.\n\n"
+        "Введіть суму в числовому форматі:"
+    )
+    
+    await query.edit_message_text(
+        message_text, 
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    
+    context.user_data['setup_step'] = 'balance'
+    
+    return WAITING_BALANCE_INPUT
+
+async def back_to_currency(query, context):
+    """Повернення до вибору валюти"""
+    return await show_currency_selection(query, context)
+
+async def show_monthly_budget_input(query, context):
+    """Показує форму для введення місячного бюджету"""
+    keyboard = [[InlineKeyboardButton("« Назад", callback_data="budget")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    message_text = (
+        "📝 *Налаштування місячного бюджету*\n\n"
+        "Вкажіть суму вашого місячного бюджету (наприклад: 15000).\n"
+        "Це допоможе нам контролювати ваші витрати та надавати корисні поради.\n\n"
+        "Введіть суму в числовому форматі:"
+    )
+    
+    message = await query.edit_message_text(
+        message_text, 
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    
+    context.user_data['waiting_for'] = 'monthly_budget'
+    context.user_data['message_id'] = message.message_id
+    
+    return WAITING_BUDGET_INPUT
+
+async def show_categories_setup(query, context):
+    """Показує форму для налаштування категорій витрат і доходів"""
+    # Отримуємо існуючі категорії користувача
+    user_id = query.from_user.id
+    user = get_or_create_user(user_id)
+    
+    categories = get_user_categories(user.id)
+    expense_categories = [c for c in categories if c.type == TransactionType.EXPENSE]
+    income_categories = [c for c in categories if c.type == TransactionType.INCOME]
+    
+    # Формуємо список стандартних категорій, якщо у користувача їх немає
+    standard_expense_categories = [
+        "Продукти", "Транспорт", "Житло", "Комунальні послуги", 
+        "Розваги", "Одяг", "Здоров'я", "Освіта", "Техніка"
+    ]
+    
+    standard_income_categories = [
+        "Зарплата", "Фріланс", "Подарунки", "Інвестиції", "Продаж"
+    ]
+    
+    # Додаємо стандартні категорії для користувача
+    with Session() as session:
+        if not expense_categories:
+            for name in standard_expense_categories:
+                category = Category(
+                    user_id=user.id,
+                    name=name,
+                    type=TransactionType.EXPENSE,
+                    emoji="📦" # За замовчуванням
+                )
+                session.add(category)
+            
+        if not income_categories:
+            for name in standard_income_categories:
+                category = Category(
+                    user_id=user.id,
+                    name=name,
+                    type=TransactionType.INCOME,
+                    emoji="💰" # За замовчуванням
+                )
+                session.add(category)
+            
+        session.commit()
+    
+    # Оновлюємо список категорій після додавання нових
+    categories = get_user_categories(user.id)
+    expense_categories = [c for c in categories if c.type == TransactionType.EXPENSE]
+    income_categories = [c for c in categories if c.type == TransactionType.INCOME]
+    
+    # Формуємо повідомлення і кнопки
+    expense_list = "\n".join([f"• {c.name}" for c in expense_categories[:5]])
+    income_list = "\n".join([f"• {c.name}" for c in income_categories[:5]])
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("✏️ Редагувати категорії витрат", callback_data="edit_expense_categories")
+        ],
+        [
+            InlineKeyboardButton("✏️ Редагувати категорії доходів", callback_data="edit_income_categories")
+        ],
+        [
+            InlineKeyboardButton("« Назад до бюджету", callback_data="budget"),
+            InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    message_text = (
+        "🏷️ *Налаштування категорій*\n\n"
+        "*Ваші категорії витрат:*\n"
+        f"{expense_list}\n"
+        f"...та ще {len(expense_categories) - 5 if len(expense_categories) > 5 else 0} інших\n\n"
+        "*Ваші категорії доходів:*\n"
+        f"{income_list}\n"
+        f"...та ще {len(income_categories) - 5 if len(income_categories) > 5 else 0} інших\n\n"
+        "Ми вже створили для вас стандартний набір категорій. "
+        "Ви можете редагувати їх або додавати нові."
+    )
+    
+    await query.edit_message_text(
+        message_text, 
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    
+    return ConversationHandler.END
+
+async def process_initial_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обробка введеного початкового балансу і завершення налаштування"""
+    try:
+        balance = float(update.message.text.replace(',', '.'))
+        user_id = update.effective_user.id
+        
+        with Session() as session:
+            user = session.query(User).filter(User.telegram_id == user_id).first()
+            user.initial_balance = balance
+            
+            # Встановлюємо, що налаштування завершено
+            user.setup_step = 'completed'
+            user.is_setup_completed = True
+            
+            session.commit()
+            
+            # Створюємо початкову транзакцію
+            transaction = Transaction(
+                user_id=user.id,
+                amount=balance,
+                type=TransactionType.INCOME,
+                description="Початковий баланс",
+                transaction_date=datetime.utcnow()
+            )
+            session.add(transaction)
+            session.commit()
+        
+        # Отримуємо валюту користувача для відображення
+        currency_code = user.currency
+        currency_symbols = {
+            "UAH": "₴",
+            "USD": "$",
+            "EUR": "€",
+            "GBP": "£"
+        }
+        currency_symbol = currency_symbols.get(currency_code, currency_code)
+        
+        # Показуємо повідомлення про успішне завершення налаштування
+        keyboard = [
+            [
+                InlineKeyboardButton("💰 Мій бюджет", callback_data="budget"),
+                InlineKeyboardButton("➕ Додати операцію", callback_data="add_transaction")
+            ],
+            [
+                InlineKeyboardButton("📊 Аналітика", callback_data="reports"),
+                InlineKeyboardButton("⚙️ Налаштування", callback_data="settings")
+            ],
+            [
+                InlineKeyboardButton("❓ Допомога", callback_data="help")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message_text = (
+            "🎉 *Налаштування успішно завершено!*\n\n"
+            f"✅ Валюта: {currency_code} ({currency_symbol})\n"
+            f"✅ Початковий баланс: {balance} {currency_symbol}\n\n"
+            "Тепер ви можете повноцінно користуватися усіма функціями бота FinAssist.\n\n"
+            "*Що робити далі:*\n"
+            "• Додайте ваші регулярні доходи і витрати\n"
+            "• Перегляньте аналітику в розділі 'Мій бюджет'\n"
+            "• Налаштуйте категорії в розділі 'Налаштування'\n\n"
+            "Дякуємо, що обрали нашого бота для керування фінансами! 💼"
+        )
+        
+        await update.message.reply_text(
+            message_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        
+        return ConversationHandler.END
+        
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Будь ласка, введіть коректне число (наприклад: 5000)."
+        )
+    
+    return WAITING_BALANCE_INPUT
+
+async def process_monthly_budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обробка введеного місячного бюджету"""
+    try:
+        budget = float(update.message.text.replace(',', '.'))
+        user_id = update.effective_user.id
+        
+        with Session() as session:
+            user = session.query(User).filter(User.telegram_id == user_id).first()
+            user.monthly_budget = budget
+            session.commit()
+        
+        # Переходимо до наступного кроку - налаштування категорій
+        
+        # Отримуємо існуючі категорії користувача
+        user = get_or_create_user(user_id)
+        
+        # Створюємо стандартні категорії для користувача
+        await setup_default_categories(user_id)
+        
+        # Повідомляємо про успішне завершення налаштування
+        await update.message.reply_text(
+            "🚀 *Налаштування бота - Крок 3 з 3*\n\n"
+            f"✅ Місячний бюджет встановлено: {budget} грн\n\n"
+            "🏷️ *Категорії витрат та доходів*\n\n"
+            "Ми автоматично створили для вас стандартний набір категорій для витрат та доходів.\n"
+            "Ви можете переглянути та налаштувати їх детальніше в розділі 'Налаштування' > 'Категорії'.\n\n"
+            "Натисніть кнопку 'Завершити налаштування' для початку роботи з ботом.",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ Завершити налаштування", callback_data="complete_setup")]
+            ])
+        )
+        
+        context.user_data['setup_step'] = 'categories'
+        return SETUP_COMPLETE
+        
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Будь ласка, введіть коректне число (наприклад: 15000)."
+        )
+    
+    return WAITING_BUDGET_INPUT
+
+async def start_initial_setup(query, context):
+    """Починає процес початкового налаштування бота"""
+    # Встановлюємо перший крок налаштування
+    context.user_data['setup_step'] = 'balance'
+    
+    # Показуємо форму для введення початкового балансу
+    keyboard = [[InlineKeyboardButton("« Назад", callback_data="back_to_main")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    message_text = (
+        "🚀 *Налаштування бота - Крок 1 з 3*\n\n"
+        "💰 *Введіть ваш початковий баланс*\n\n"
+        "Вкажіть суму коштів, яку ви маєте зараз (наприклад: 5000).\n"
+        "Це допоможе нам правильно відстежувати ваші фінанси.\n\n"
+        "Введіть суму в числовому форматі:"
+    )
+    
+    message = await query.edit_message_text(
+        message_text, 
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    
+    context.user_data['message_id'] = message.message_id
+    
+    return WAITING_BALANCE_INPUT
+
+async def complete_initial_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Завершує процес початкового налаштування бота"""
+    user_id = update.effective_user.id
+    
+    # Встановлюємо, що налаштування бота завершено
+    with Session() as session:
+        user = session.query(User).filter(User.telegram_id == user_id).first()
+        user.is_setup_completed = True
+        session.commit()
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("💰 Мій бюджет", callback_data="budget"),
+            InlineKeyboardButton("➕ Додати операцію", callback_data="add_transaction")
+        ],
+        [
+            InlineKeyboardButton("📊 Аналітика", callback_data="reports"),
+            InlineKeyboardButton("⚙️ Налаштування", callback_data="settings")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        "🎉 *Налаштування бота успішно завершено!*\n\n"
+        "Тепер ви можете повноцінно користуватися усіма функціями бота FinAssist.\n\n"
+        "Рекомендуємо почати з додавання ваших перших фінансових операцій, "
+        "щоб ми могли надати вам корисну аналітику та поради.\n\n"
+        "*Що робити далі:*\n"
+        "• Додайте ваші регулярні доходи і витрати\n"
+        "• Завантажте банківську виписку або фото чеків\n"
+        "• Перегляньте аналітику через кілька днів використання\n\n"
+        "Дякуємо, що обрали нашого бота для керування фінансами! 💼",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    
+    return ConversationHandler.END
+
+async def complete_setup(query, context):
+    """Завершує процес початкового налаштування бота"""
+    user_id = query.from_user.id
+    
+    # Встановлюємо, що налаштування бота завершено
+    with Session() as session:
+        user = session.query(User).filter(User.telegram_id == user_id).first()
+        user.is_setup_completed = True
+        user.setup_step = 'completed'
+        session.commit()
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("💰 Мій бюджет", callback_data="budget"),
+            InlineKeyboardButton("➕ Додати операцію", callback_data="add_transaction")
+        ],
+        [
+            InlineKeyboardButton("📊 Аналітика", callback_data="reports"),
+            InlineKeyboardButton("⚙️ Налаштування", callback_data="settings")
+        ],
+        [
+            InlineKeyboardButton("❓ Допомога", callback_data="help")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        "🎉 *Налаштування бота успішно завершено!*\n\n"
+        "Тепер ви можете повноцінно користуватися усіма функціями бота FinAssist.\n\n"
+        "Рекомендуємо почати з додавання ваших перших фінансових операцій, "
+        "щоб ми могли надати вам корисну аналітику та поради.\n\n"
+        "*Що робити далі:*\n"
+        "• Додайте ваші регулярні доходи і витрати\n"
+        "• Завантажте банківську виписку або фото чеків\n"
+        "• Перегляньте аналітику через кілька днів використання\n\n"
+        "Дякуємо, що обрали нашого бота для керування фінансами! 💼",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    
+    return ConversationHandler.END
+
+async def setup_default_categories(user_id):
+    """Створює стандартні категорії витрат та доходів для користувача"""
+    user = get_or_create_user(user_id)
+    
+    categories = get_user_categories(user.id)
+    expense_categories = [c for c in categories if c.type == TransactionType.EXPENSE]
+    income_categories = [c for c in categories if c.type == TransactionType.INCOME]
+    
+    # Формуємо список стандартних категорій
+    standard_expense_categories = [
+        ("Продукти", "🥗"),
+        ("Транспорт", "🚌"),
+        ("Житло", "🏠"),
+        ("Комунальні послуги", "💡"),
+        ("Розваги", "🎭"),
+        ("Одяг", "👚"),
+        ("Здоров'я", "🏥"),
+        ("Освіта", "📚"),
+        ("Техніка", "📱")
+    ]
+    
+    standard_income_categories = [
+        ("Зарплата", "💰"),
+        ("Фріланс", "💻"),
+        ("Подарунки", "🎁"),
+        ("Інвестиції", "📈"),
+        ("Продаж", "🏷️")
+    ]
+    
+    # Додаємо стандартні категорії для користувача
+    with Session() as session:
+        if not expense_categories:
+            for name, emoji in standard_expense_categories:
+                category = Category(
+                    user_id=user.id,
+                    name=name,
+                    type=TransactionType.EXPENSE,
+                    emoji=emoji
+                )
+                session.add(category)
+            
+        if not income_categories:
+            for name, emoji in standard_income_categories:
+                category = Category(
+                    user_id=user.id,
+                    name=name,
+                    type=TransactionType.INCOME,
+                    emoji=emoji
+                )
+                session.add(category)
+            
+        session.commit()

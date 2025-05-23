@@ -39,6 +39,42 @@ def get_or_create_user(telegram_id, username=None, first_name=None, last_name=No
     session.close()
     return user
 
+def update_user_settings(telegram_id, **settings):
+    """Оновлення налаштувань користувача"""
+    session = Session()
+    user = session.query(User).filter(User.telegram_id == telegram_id).first()
+    
+    if not user:
+        session.close()
+        return None
+    
+    # Оновлюємо доступні налаштування
+    if 'initial_balance' in settings:
+        user.initial_balance = settings['initial_balance']
+    
+    if 'currency' in settings:
+        user.currency = settings['currency']
+    
+    if 'monthly_budget' in settings:
+        user.monthly_budget = settings['monthly_budget']
+    
+    if 'notification_enabled' in settings:
+        user.notification_enabled = settings['notification_enabled']
+    
+    if 'setup_step' in settings:
+        user.setup_step = settings['setup_step']
+    
+    if 'is_setup_completed' in settings:
+        user.is_setup_completed = settings['is_setup_completed']
+    
+    user.last_active = datetime.utcnow()
+    
+    session.commit()
+    session.refresh(user)
+    session.close()
+    
+    return user
+
 def add_transaction(user_id, amount, description, category_id, transaction_type, transaction_date=None, source="manual", receipt_image=None):
     """Додає нову транзакцію до бази даних"""
     session = Session()

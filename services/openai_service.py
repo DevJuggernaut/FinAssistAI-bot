@@ -231,4 +231,10 @@ Format the response as a JSON object with the following structure:
                 "tips": []
             }
         
-        return recommendations 
+        return recommendations
+
+# Import API key from config
+from database.config import OPENAI_API_KEY
+
+# Create an instance for import
+openai_service = OpenAIService(api_key=OPENAI_API_KEY)

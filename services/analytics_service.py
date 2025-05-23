@@ -15,7 +15,13 @@ class AnalyticsService:
     def __init__(self, output_dir: str = 'reports'):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
-        plt.style.use('seaborn')
+        # Use a default style instead of 'seaborn' which might not be available
+        try:
+            # Try to use seaborn-v0_8 style if available
+            plt.style.use('seaborn-v0_8')
+        except:
+            # Fallback to default style
+            plt.style.use('default')
         
     def generate_monthly_report(self, transactions: List[Dict]) -> Dict:
         """
@@ -292,4 +298,7 @@ class AnalyticsService:
             }
         except Exception as e:
             logger.error(f"Error generating budget analysis: {str(e)}")
-            raise 
+            raise
+
+# Create an instance for import
+analytics_service = AnalyticsService()

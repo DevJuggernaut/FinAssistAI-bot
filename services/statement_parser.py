@@ -103,4 +103,8 @@ class ReceiptProcessor:
                     'description': description,
                     'amount': amount
                 })
-        return items 
+        return items
+
+# Create instances for import
+statement_parser = StatementParser()
+receipt_processor = ReceiptProcessor()
