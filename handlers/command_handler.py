@@ -263,12 +263,22 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def budget_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обробка команди /budget"""
-    if not context.args:
-        await update.message.reply_text(
-            "❌ Неправильний формат команди.\n"
-            "Використовуйте: /budget встановити <сума>"
-        )
-        return
+    # Показуємо меню бюджету
+    from handlers.callback_handler import show_budget_menu
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("💰 Мій бюджет", callback_data="my_budget"),
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        "Натисніть кнопку нижче, щоб переглянути свій бюджет:",
+        reply_markup=reply_markup
+    )
+    
+    return
     
     if context.args[0] == "встановити" and len(context.args) > 1:
         try:

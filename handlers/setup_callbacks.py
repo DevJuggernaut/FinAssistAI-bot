@@ -169,7 +169,7 @@ async def process_initial_balance(update: Update, context: ContextTypes.DEFAULT_
         # Показуємо повідомлення про успішне завершення налаштування
         keyboard = [
             [
-                InlineKeyboardButton("💰 Мій бюджет", callback_data="budget"),
+                InlineKeyboardButton("💰 Мій бюджет", callback_data="my_budget"),
                 InlineKeyboardButton("➕ Додати операцію", callback_data="add_transaction")
             ],
             [
@@ -222,7 +222,7 @@ async def complete_setup(query, context):
     
     keyboard = [
         [
-            InlineKeyboardButton("💰 Мій бюджет", callback_data="budget"),
+            InlineKeyboardButton("💰 Мій бюджет", callback_data="my_budget"),
             InlineKeyboardButton("➕ Додати операцію", callback_data="add_transaction")
         ],
         [

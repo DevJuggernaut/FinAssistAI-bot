@@ -168,8 +168,11 @@ def get_monthly_stats(user_id, year=None, month=None):
 
 def get_transactions(user_id, limit=10, offset=0, category_id=None, transaction_type=None, start_date=None, end_date=None):
     """Отримує список транзакцій з фільтрами"""
+    from sqlalchemy.orm import joinedload
+    
     session = Session()
     query = session.query(Transaction)\
+        .options(joinedload(Transaction.category))\
         .filter(Transaction.user_id == user_id)
     
     if category_id:
@@ -183,6 +186,12 @@ def get_transactions(user_id, limit=10, offset=0, category_id=None, transaction_
     
     transactions = query.order_by(Transaction.transaction_date.desc())\
         .limit(limit).offset(offset).all()
+    
+    # Detach objects from session to avoid lazy loading issues
+    for transaction in transactions:
+        session.expunge(transaction)
+        if transaction.category:
+            session.expunge(transaction.category)
     
     session.close()
     

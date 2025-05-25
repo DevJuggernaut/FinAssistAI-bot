@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обробляє натискання на інлайн-кнопки"""
+    query = None
     try:
         query = update.callback_query
         await query.answer()  # Відповідаємо на колбек, щоб прибрати "годинник" з кнопки
@@ -63,8 +64,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_currency_selection(query, context)
         elif callback_data == "complete_setup":
             await complete_setup(query, context)
+        elif callback_data == "setup_monthly_budget":
+            await show_setup_monthly_budget_form(query, context)
+        elif callback_data == "setup_categories":
+            await show_setup_categories_form(query, context)
         
         # Бюджетування і поради
+        elif callback_data == "my_budget":
+            from handlers.budget_callbacks import show_my_budget_overview
+            await show_my_budget_overview(query, context)
+        elif callback_data == "my_budget_overview":
+            from handlers.budget_callbacks import show_my_budget_overview
+            await show_my_budget_overview(query, context)
         elif callback_data == "budget":
             await show_budget_menu(query, context)
         elif callback_data == "create_monthly_budget":
@@ -113,6 +124,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif callback_data == "add_income":
                 await show_add_income_form(query, context)
         
+        # Перегляд транзакцій
+        elif callback_data == "view_all_transactions":
+            await show_all_transactions(query, context)
+        elif callback_data == "prev_transactions_page":
+            await handle_transactions_pagination(query, context, direction="prev")
+        elif callback_data == "next_transactions_page":
+            await handle_transactions_pagination(query, context, direction="next")
+        
         # Аналіз
         elif callback_data.startswith('analyze_'):
             await handle_analysis_callback(query, user)
@@ -124,10 +143,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     except Exception as e:
         logger.error(f"Error handling callback: {str(e)}")
-        await query.edit_message_text(
-            text="Виникла помилка при обробці запиту.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Назад", callback_data="back_to_main")]])
-        )
+        if query:
+            await query.edit_message_text(
+                text="Виникла помилка при обробці запиту.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Назад", callback_data="back_to_main")]])
+            )
 
 async def handle_analysis_callback(query, user):
     """Обробка колбеків аналізу"""
@@ -696,8 +716,8 @@ async def show_main_menu(query, context):
             InlineKeyboardButton("➕ Нова транзакція", callback_data="add_transaction")
         ],
         [
-            InlineKeyboardButton("📁 Мої категорії", callback_data="categories"),
-            InlineKeyboardButton("💼 Бюджет", callback_data="budget")
+            InlineKeyboardButton("💰 Мій бюджет", callback_data="my_budget"),
+            InlineKeyboardButton("📁 Мої категорії", callback_data="categories")
         ],
         [
             InlineKeyboardButton("📈 Аналітика", callback_data="reports"),
@@ -802,21 +822,20 @@ async def show_budget_menu(query, context):
     
     # Перевіряємо, чи налаштовані початкові дані користувача
     if user.initial_balance is None or user.monthly_budget is None:
-        # Якщо початкові дані не налаштовані, пропонуємо це зробити
-        keyboard = [
-            [
-                InlineKeyboardButton("💰 Встановити початковий баланс", callback_data="setup_initial_balance")
-            ],
-            [
-                InlineKeyboardButton("📝 Встановити місячний бюджет", callback_data="setup_monthly_budget")
-            ],
-            [
-                InlineKeyboardButton("🏷️ Налаштувати категорії витрат", callback_data="setup_categories")
-            ],
-            [
-                InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")
-            ]
-        ]
+        # Автоматично встановлюємо базові значення
+        if user.initial_balance is None:
+            user.initial_balance = 0
+        if user.monthly_budget is None:
+            user.monthly_budget = 10000
+        
+        # Зберігаємо зміни в базі даних
+        from database.session import Session
+        session = Session()
+        try:
+            session.merge(user)
+            session.commit()
+        finally:
+            session.close()
     elif budget_status['status'] == 'no_active_budget':
         # Якщо немає активного бюджету, пропонуємо створити новий
         keyboard = [
@@ -835,28 +854,41 @@ async def show_budget_menu(query, context):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        if user.initial_balance is None or user.monthly_budget is None:
-            await query.edit_message_text(
-                "⚠️ *Необхідне початкове налаштування*\n\n"
-                "Для повноцінної роботи з ботом потрібно виконати налаштування:\n\n"
-                "1️⃣ Встановити ваш початковий фінансовий баланс\n"
-                "2️⃣ Налаштувати місячний бюджет витрат\n"
-                "3️⃣ Створити категорії для ваших фінансових операцій\n\n"
-                "Оберіть опцію нижче для налаштування бота:",
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
-        else:
-            await query.edit_message_text(
-                "💼 *Управління бюджетом*\n\n"
-                "У вас немає активного бюджету на поточний період.\n"
-            "Створіть новий бюджет для кращого контролю витрат.",
+        # Якщо немає активного бюджету, показуємо фінансовий стан
+        financial_status = budget_status.get('financial_status')
+        
+        message = "💼 *Управління бюджетом*\n\n"
+        
+        # Показуємо поточний фінансовий стан навіть без активного бюджету
+        if financial_status:
+            balance_emoji = "💰" if financial_status['current_balance'] >= 0 else "🔻"
+            message += f"💳 *Поточний стан фінансів:*\n"
+            message += f"{balance_emoji} *Загальний баланс*: `{financial_status['current_balance']:.2f} грн`\n"
+            if financial_status['current_balance'] >= 0:
+                message += f"📈 Загальний прибуток: `{financial_status['total_income']:.2f} грн`\n"
+            message += f"📉 Загальні витрати: `{financial_status['total_expenses']:.2f} грн`\n\n"
+            
+            # Показуємо витрати за поточний місяць по категоріях, якщо є
+            if financial_status['category_balances']:
+                message += f"📊 *Витрати цього місяця по категоріях:*\n"
+                for i, cat_balance in enumerate(financial_status['category_balances'][:5]):
+                    message += f"{cat_balance['icon']} {cat_balance['name']}: `{cat_balance['spent_amount']:.0f} грн`\n"
+                if len(financial_status['category_balances']) > 5:
+                    message += f"... та ще {len(financial_status['category_balances']) - 5} категорій\n"
+                message += "\n"
+        
+        message += "У вас немає активного бюджету на поточний період.\n"
+        message += "Створіть новий бюджет для кращого контролю витрат."
+        
+        await query.edit_message_text(
+            message,
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
     else:
         # Якщо є активний бюджет, показуємо його статус
         active_budget = budget_status['data']
+        financial_status = budget_status.get('financial_status')
         start_date = active_budget['budget'].start_date.strftime('%d.%m.%Y')
         end_date = active_budget['budget'].end_date.strftime('%d.%m.%Y')
         
@@ -871,15 +903,27 @@ async def show_budget_menu(query, context):
         else:
             status_emoji = "🟢"
         
-        message = (
-            f"💼 *Бюджет: {active_budget['budget'].name}*\n"
-            f"📅 Період: {start_date} - {end_date}\n\n"
-            f"{status_emoji} *Стан бюджету*: {usage_percent:.1f}% використано\n"
-            f"💰 *Загальний бюджет*: `{active_budget['budget'].total_budget:.2f} грн`\n"
-            f"💸 *Витрачено*: `{active_budget['total_spending']:.2f} грн`\n"
-            f"✅ *Залишилось*: `{active_budget['total_remaining']:.2f} грн`\n\n"
-            f"📊 *Деталі по категоріям*:\n"
-        )
+        # Формуємо основне повідомлення з поточним станом фінансів
+        message = f"💼 *Бюджет: {active_budget['budget'].name}*\n"
+        message += f"📅 Період: {start_date} - {end_date}\n\n"
+        
+        # Поточний стан фінансів
+        if financial_status:
+            balance_emoji = "💰" if financial_status['current_balance'] >= 0 else "🔻"
+            message += f"💳 *Поточний стан фінансів:*\n"
+            message += f"{balance_emoji} *Загальний баланс*: `{financial_status['current_balance']:.2f} грн`\n"
+            if financial_status['current_balance'] >= 0:
+                message += f"📈 Прибуток: `{financial_status['total_income']:.2f} грн`\n"
+            message += f"📉 Витрачено всього: `{financial_status['total_expenses']:.2f} грн`\n\n"
+        
+        # Стан бюджету
+        message += f"{status_emoji} *Стан бюджету*: {usage_percent:.1f}% використано\n"
+        message += f"💰 *Місячний бюджет*: `{active_budget['budget'].total_budget:.2f} грн`\n"
+        message += f"💸 *Витрачено за місяць*: `{active_budget['total_spending']:.2f} грн`\n"
+        message += f"✅ *Залишилось*: `{active_budget['total_remaining']:.2f} грн`\n\n"
+        
+        # Баланс по категоріях
+        message += f"📊 *Баланс по категоріях*:\n"
         
         # Додаємо інформацію по категоріям
         for i, cat_budget in enumerate(sorted(active_budget['category_budgets'], key=lambda x: x['usage_percent'], reverse=True)):
@@ -894,12 +938,46 @@ async def show_budget_menu(query, context):
                 
                 message += (
                     f"{cat_emoji} {cat_budget['category_icon']} {cat_budget['category_name']}: "
-                    f"`{cat_budget['usage_percent']:.1f}%` "
-                    f"(`{cat_budget['actual_spending']:.0f}`/`{cat_budget['allocated_amount']:.0f}` грн)\n"
+                    f"`{cat_budget['usage_percent']:.1f}%`\n"
+                    f"   Витрачено: `{cat_budget['actual_spending']:.0f}` з `{cat_budget['allocated_amount']:.0f} грн`\n"
                 )
         
         if len(active_budget['category_budgets']) > 5:
             message += f"... та ще {len(active_budget['category_budgets']) - 5} категорій\n"
+        
+        # Додаємо порівняння з попереднім періодом
+        comparison = budget_manager.get_previous_period_comparison()
+        if comparison:
+            message += f"\n📈 *Порівняння з попереднім періодом:*\n"
+            
+            # Загальна зміна
+            change = comparison['total_change']
+            change_percent = comparison['total_change_percent']
+            
+            if change > 0:
+                change_emoji = "📈"
+                change_text = f"збільшились на {change:.2f} грн ({change_percent:+.1f}%)"
+            elif change < 0:
+                change_emoji = "📉"
+                change_text = f"зменшились на {abs(change):.2f} грн ({change_percent:+.1f}%)"
+            else:
+                change_emoji = "➡️"
+                change_text = "залишились на тому ж рівні"
+            
+            message += f"{change_emoji} Витрати {change_text}\n"
+            
+            # Топ зміни по категоріям
+            if comparison['category_comparisons']:
+                # Сортуємо по абсолютній зміні (найбільші зміни спочатку)
+                sorted_changes = sorted(comparison['category_comparisons'], 
+                                      key=lambda x: abs(x['change']), reverse=True)[:3]
+                
+                message += f"🔝 *Найбільші зміни по категоріях:*\n"
+                for cat_change in sorted_changes:
+                    if abs(cat_change['change']) > 50:  # Показуємо тільки значні зміни
+                        change_sign = "+" if cat_change['change'] > 0 else ""
+                        message += f"   {cat_change['icon']} {cat_change['name']}: "
+                        message += f"`{change_sign}{cat_change['change']:.0f} грн`\n"
         
         # Додаємо кнопки для управління бюджетом
         keyboard = [
@@ -1561,7 +1639,7 @@ async def back_to_main(query, context):
     """Повернення до головного меню"""
     keyboard = [
         [
-            InlineKeyboardButton("💰 Мій бюджет", callback_data="budget"),
+            InlineKeyboardButton("💰 Мій бюджет", callback_data="my_budget"),
             InlineKeyboardButton("➕ Додати операцію", callback_data="add_transaction")
         ],
         [
@@ -1582,4 +1660,220 @@ async def back_to_main(query, context):
         "Ваш особистий фінансовий помічник готовий до роботи.",
         parse_mode='Markdown',
         reply_markup=reply_markup
+    )
+
+async def show_all_transactions(query, context):
+    """Показує всі транзакції користувача з пагінацією"""
+    user_id = query.from_user.id
+    user = get_or_create_user(
+        telegram_id=user_id,
+        username=query.from_user.username,
+        first_name=query.from_user.first_name,
+        last_name=query.from_user.last_name
+    )
+    
+    # Отримуємо параметри пагінації з контексту або встановлюємо за замовчуванням
+    page = context.user_data.get('transactions_page', 0)
+    transactions_per_page = 10
+    
+    # Отримуємо загальну кількість транзакцій
+    all_transactions = get_user_transactions(user.id, limit=1000)  # Отримуємо всі для підрахунку
+    total_transactions = len(all_transactions)
+    
+    if total_transactions == 0:
+        await query.edit_message_text(
+            "📋 *Всі транзакції*\n\n"
+            "_У вас ще немає жодної транзакції_\n\n"
+            "Почніть додавати доходи та витрати для відстеження фінансів!",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("➕ Додати транзакцію", callback_data="add_transaction")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="my_budget_overview")]
+            ]),
+            parse_mode="Markdown"
+        )
+        return
+    
+    # Розраховуємо дані для пагінації
+    total_pages = (total_transactions - 1) // transactions_per_page + 1
+    offset = page * transactions_per_page
+    
+    # Отримуємо транзакції для поточної сторінки
+    transactions = get_user_transactions(user.id, limit=transactions_per_page, offset=offset)
+    
+    # Формуємо повідомлення
+    message = f"📋 *Всі транзакції* (стор. {page + 1}/{total_pages})\n\n"
+    
+    # Групуємо транзакції за датами
+    current_date = None
+    for transaction in transactions:
+        transaction_date = transaction.transaction_date.date()
+        
+        # Додаємо заголовок дати, якщо це новий день
+        if current_date != transaction_date:
+            current_date = transaction_date
+            date_str = transaction_date.strftime("%d.%m.%Y")
+            
+            # Визначаємо чи це сьогодні/вчора
+            today = datetime.now().date()
+            if transaction_date == today:
+                date_str = "Сьогодні"
+            elif transaction_date == today - timedelta(days=1):
+                date_str = "Вчора"
+            
+            message += f"📅 *{date_str}*\n"
+        
+        # Форматуємо час
+        time_str = transaction.transaction_date.strftime("%H:%M")
+        
+        # Отримуємо категорію та її іконку
+        category_name = "Інше"
+        category_icon = "📋"
+        if transaction.category:
+            category_name = transaction.category.name
+            category_icon = transaction.category.icon or "📋"
+         # Визначаємо колір та знак суми
+        if transaction.type.value == 'income':
+            amount_str = f"+{transaction.amount:.2f}"
+            amount_emoji = "🟢"
+        else:
+            amount_str = f"-{transaction.amount:.2f}"
+            amount_emoji = "🔴"
+        
+        # Опис транзакції
+        description = transaction.description or "Без опису"
+        if len(description) > 30:
+            description = description[:27] + "..."
+        
+        message += f"  `{time_str}` {category_icon} {description}\n"
+        message += f"  {amount_emoji} `{amount_str}` • {category_name}\n"
+    
+    message += f"\n💰 Всього транзакцій: {total_transactions}"
+    
+    # Створюємо кнопки навігації
+    keyboard = []
+    
+    # Кнопки пагінації
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton("⬅️ Попередня", callback_data="prev_transactions_page"))
+    if page < total_pages - 1:
+        nav_row.append(InlineKeyboardButton("Наступна ➡️", callback_data="next_transactions_page"))
+    
+    if nav_row:
+        keyboard.append(nav_row)
+    
+    # Кнопки дій
+    keyboard.extend([
+        [
+            InlineKeyboardButton("➕ Додати дохід", callback_data="add_income"),
+            InlineKeyboardButton("➖ Додати витрату", callback_data="add_expense")
+        ],
+        [
+            InlineKeyboardButton("📥 Експорт CSV", callback_data="export_transactions")
+        ],
+        [
+            InlineKeyboardButton("🔙 До бюджету", callback_data="my_budget_overview")
+        ]
+    ])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
+
+async def handle_transactions_pagination(query, context, direction):
+    """Обробляє навігацію по сторінкам транзакцій"""
+    current_page = context.user_data.get('transactions_page', 0)
+    
+    if direction == "prev" and current_page > 0:
+        context.user_data['transactions_page'] = current_page - 1
+    elif direction == "next":
+        context.user_data['transactions_page'] = current_page + 1
+    
+    # Показуємо оновлену сторінку
+    await show_all_transactions(query, context)
+
+async def show_setup_monthly_budget_form(query, context):
+    """Показує форму для встановлення місячного бюджету"""
+    message = (
+        "💰 *Налаштування місячного бюджету*\n\n"
+        "Будь ласка, введіть вашу бажану суму місячного бюджету.\n"
+        "Це допоможе вам контролювати витрати та планувати фінанси.\n\n"
+        "💡 *Поради*:\n"
+        "• Враховуйте всі основні категорії витрат\n"
+        "• Залишайте 10-20% для непередбачених витрат\n"
+        "• Можете змінити бюджет у будь-який час\n\n"
+        "Введіть суму (наприклад: 15000):"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Назад", callback_data="my_budget_overview")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
+
+async def show_setup_categories_form(query, context):
+    """Показує форму для налаштування категорій"""
+    from handlers.setup_callbacks import setup_default_categories
+    
+    user = get_user(query.from_user.id)
+    if not user:
+        await query.edit_message_text("Користувач не знайдений. Будь ласка, спочатку виконайте /start")
+        return
+    
+    # Створюємо стандартні категорії
+    await setup_default_categories(user.telegram_id)
+    
+    # Отримуємо створені категорії
+    categories = get_user_categories(user.id)
+    expense_categories = [c for c in categories if c.type.value == 'expense']
+    income_categories = [c for c in categories if c.type.value == 'income']
+    
+    message = "✅ *Категорії успішно налаштовані!*\n\n"
+    
+    if expense_categories:
+        message += "💸 *Категорії витрат*:\n"
+        for cat in expense_categories[:8]:  # Показуємо перші 8
+            message += f"• {cat.icon} {cat.name}\n"
+        if len(expense_categories) > 8:
+            message += f"• та ще {len(expense_categories) - 8} категорій...\n"
+        message += "\n"
+    
+    if income_categories:
+        message += "💰 *Категорії доходів*:\n"
+        for cat in income_categories[:5]:  # Показуємо перші 5
+            message += f"• {cat.icon} {cat.name}\n"
+        if len(income_categories) > 5:
+            message += f"• та ще {len(income_categories) - 5} категорій...\n"
+        message += "\n"
+    
+    message += (
+        "Ви можете додавати нові категорії або редагувати існуючі "
+        "через меню 'Категорії' у головному меню бота.\n\n"
+        "Тепер ви можете використовувати всі функції управління бюджетом!"
+    )
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("📊 Мій бюджет", callback_data="my_budget_overview"),
+            InlineKeyboardButton("🏷️ Категорії", callback_data="categories")
+        ],
+        [
+            InlineKeyboardButton("🔙 Головне меню", callback_data="main_menu")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
     )
