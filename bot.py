@@ -111,14 +111,13 @@ def main():
     # Обробники повідомлень
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler.handle_text_message))
     application.add_handler(MessageHandler(filters.PHOTO, message_handler.handle_photo))
-    application.add_handler(MessageHandler(filters.Document.ALL, message_handler.handle_document))
+    application.add_handler(MessageHandler(filters.Document.ALL, message_handler.handle_document_message))
     
     # Обробник колбеків від інлайн-кнопок
     application.add_handler(CallbackQueryHandler(callback_handler.handle_callback))
     
     # Запускаємо бота
     logger.info("FinAssistAI Bot started successfully! Press Ctrl+C to stop.")
-    logger.info("Bot is ready to provide financial assistance without initial questions.")
     application.run_polling()
 
 if __name__ == '__main__':

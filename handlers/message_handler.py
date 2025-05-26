@@ -28,6 +28,33 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text("Будь ласка, спочатку налаштуйте бота командою /start")
             return
         
+        # Перевіряємо, чи користувач вводить дані для транзакції
+        if 'transaction_data' in context.user_data:
+            transaction_data = context.user_data['transaction_data']
+            
+            if transaction_data.get('step') == 'amount':
+                # Імпортуємо функцію з callback_handler
+                from handlers.callback_handler import handle_transaction_amount_input
+                await handle_transaction_amount_input(update, context)
+                return
+            elif transaction_data.get('step') == 'description':
+                # Імпортуємо функцію з callback_handler
+                from handlers.callback_handler import handle_transaction_description_input
+                await handle_transaction_description_input(update, context)
+                return
+        
+        # Перевіряємо, чи користувач створює нову категорію
+        if 'category_creation' in context.user_data:
+            from handlers.callback_handler import handle_category_creation_input
+            await handle_category_creation_input(update, context)
+            return
+        
+        # Перевіряємо, чи користувач додає нову категорію (нова система)
+        if 'adding_category' in context.user_data:
+            from handlers.settings_handler import handle_category_name_input
+            await handle_category_name_input(update, context)
+            return
+        
         # Перевіряємо чи це транзакція у форматі "сума опис"
         match = re.match(r'^(\d+(?:\.\d+)?)\s+(.+)$', update.message.text)
         if match:
@@ -197,6 +224,13 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Будь ласка, спочатку налаштуйте бота командою /start")
             return
         
+        # Перевіряємо, чи очікуємо файл виписки
+        if context.user_data.get('waiting_for_statement', False):
+            # Використовуємо функцію з callback_handler
+            from handlers.callback_handler import handle_statement_upload
+            await handle_statement_upload(update, context)
+            return
+        
         # Отримуємо документ
         document = update.message.document
         file = await context.bot.get_file(document.file_id)
@@ -337,3 +371,175 @@ async def handle_analyze_command(update: Update, context: ContextTypes.DEFAULT_T
     except Exception as e:
         logger.error(f"Error handling analyze command: {str(e)}")
         await update.message.reply_text("Виникла помилка при обробці команди аналізу.")
+
+async def handle_document_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обробка документів (виписок)"""
+    try:
+        user = get_user(update.effective_user.id)
+        if not user:
+            await update.message.reply_text("Будь ласка, спочатку налаштуйте бота командою /start")
+            return
+        
+        # Перевіряємо, чи очікуємо файл
+        awaiting_file = context.user_data.get('awaiting_file')
+        if not awaiting_file:
+            await update.message.reply_text(
+                "📄 Файл отримано, але я не очікував його.\n\n"
+                "Щоб завантажити виписку, спочатку перейдіть до:\n"
+                "💳 Додати транзакцію → 📤 Завантажити виписку"
+            )
+            return
+        
+        document = update.message.document
+        if not document:
+            await update.message.reply_text("❌ Помилка: файл не знайдено.")
+            return
+        
+        # Перевіряємо розмір файлу
+        max_size = 10 * 1024 * 1024  # 10 МБ
+        if document.file_size > max_size:
+            await update.message.reply_text(
+                f"❌ Файл занадто великий: {document.file_size / 1024 / 1024:.1f} МБ\n"
+                f"Максимальний розмір: {max_size / 1024 / 1024:.0f} МБ"
+            )
+            return
+        
+        # Перевіряємо тип файлу
+        file_name = document.file_name.lower()
+        if awaiting_file == 'pdf' and not file_name.endswith('.pdf'):
+            await update.message.reply_text("❌ Очікується PDF файл")
+            return
+        elif awaiting_file == 'excel' and not (file_name.endswith('.xlsx') or file_name.endswith('.xls')):
+            await update.message.reply_text("❌ Очікується Excel файл (.xlsx або .xls)")
+            return
+        elif awaiting_file == 'csv' and not file_name.endswith('.csv'):
+            await update.message.reply_text("❌ Очікується CSV файл")
+            return
+        
+        # Відправляємо повідомлення про початок обробки
+        processing_message = await update.message.reply_text(
+            "🔄 **Обробка файлу...**\n\n"
+            "⏳ Завантажую та аналізую виписку\n"
+            "📊 Розпізнаю транзакції\n"
+            "🏷️ Визначаю категорії\n\n"
+            "_Це може зайняти кілька секунд_",
+            parse_mode="Markdown"
+        )
+        
+        try:
+            # Завантажуємо файл
+            file = await context.bot.get_file(document.file_id)
+            file_path = os.path.join("uploads", "statements", f"{user.id}_{document.file_name}")
+            
+            # Створюємо директорію якщо не існує
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            # Завантажуємо файл
+            await file.download_to_drive(file_path)
+            
+            # Обробляємо файл в залежності від типу
+            from services.statement_parser import StatementParser
+            parser = StatementParser()
+            
+            if awaiting_file == 'pdf':
+                transactions = await parser.parse_pdf(file_path)
+            elif awaiting_file == 'excel':
+                transactions = await parser.parse_excel(file_path)
+            elif awaiting_file == 'csv':
+                transactions = await parser.parse_csv(file_path)
+            else:
+                transactions = []
+            
+            # Видаляємо тимчасовий файл
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            
+            if not transactions:
+                await processing_message.edit_text(
+                    "❌ **Не вдалося розпізнати транзакції**\n\n"
+                    "Можливі причини:\n"
+                    "• Невірний формат файлу\n"
+                    "• Файл пошкоджений\n"
+                    "• Нестандартна структура даних\n\n"
+                    "Спробуйте інший файл або скористайтеся ручним додаванням.",
+                    parse_mode="Markdown"
+                )
+                return
+            
+            # Зберігаємо транзакції в контексті для перегляду
+            context.user_data['parsed_transactions'] = transactions
+            context.user_data['awaiting_file'] = None
+            
+            # Показуємо попередній перегляд
+            await show_transactions_preview(processing_message, context, transactions)
+            
+        except Exception as e:
+            logger.error(f"Error processing file: {str(e)}")
+            await processing_message.edit_text(
+                f"❌ **Помилка при обробці файлу**\n\n"
+                f"Деталі: {str(e)}\n\n"
+                "Спробуйте інший файл або скористайтеся ручним додаванням.",
+                parse_mode="Markdown"
+            )
+    
+    except Exception as e:
+        logger.error(f"Error in handle_document_message: {str(e)}")
+        await update.message.reply_text("Виникла помилка при обробці файлу.")
+
+async def show_transactions_preview(message, context, transactions):
+    """Показує попередній перегляд розпізнаних транзакцій"""
+    try:
+        if len(transactions) > 10:
+            preview_transactions = transactions[:10]
+            more_count = len(transactions) - 10
+        else:
+            preview_transactions = transactions
+            more_count = 0
+        
+        text = f"📊 **Знайдено {len(transactions)} транзакцій**\n\n"
+        text += "🔍 **Попередній перегляд:**\n\n"
+        
+        for i, trans in enumerate(preview_transactions, 1):
+            date_str = trans.get('date', 'Невідома дата')
+            amount = trans.get('amount', 0)
+            description = trans.get('description', 'Без опису')[:30]
+            trans_type = trans.get('type', 'expense')
+            
+            type_emoji = "💸" if trans_type == 'expense' else "💰"
+            sign = "-" if trans_type == 'expense' else "+"
+            
+            text += f"{i}. {type_emoji} {sign}{amount:,.2f} ₴\n"
+            text += f"   📅 {date_str} • 📝 {description}\n\n"
+        
+        if more_count > 0:
+            text += f"➕ _І ще {more_count} транзакцій..._\n\n"
+        
+        text += "📋 **Дії:**\n"
+        text += "• Редагуйте транзакції перед додаванням\n"
+        text += "• Виключіть непотрібні операції\n"
+        text += "• Перевірте категорії та суми"
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Додати всі", callback_data="import_all_transactions"),
+                InlineKeyboardButton("✏️ Редагувати", callback_data="edit_transactions")
+            ],
+            [
+                InlineKeyboardButton("🗑️ Виключити дублікати", callback_data="remove_duplicates"),
+                InlineKeyboardButton("📅 Налаштувати період", callback_data="set_import_period")
+            ],
+            [
+                InlineKeyboardButton("❌ Скасувати", callback_data="cancel_import")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await message.edit_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in show_transactions_preview: {str(e)}")
+        await message.edit_text("Помилка при відображенні попереднього перегляду.")

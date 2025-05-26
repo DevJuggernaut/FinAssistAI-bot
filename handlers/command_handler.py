@@ -312,3 +312,8 @@ def get_setup_handler():
         },
         fallbacks=[CommandHandler('cancel', cancel_setup)]
     )
+
+async def show_main_menu(message, context):
+    """Показує головне меню (для зворотної сумісності)"""
+    from handlers.main_menu import show_main_menu as unified_main_menu
+    await unified_main_menu(message, context, is_query=False)

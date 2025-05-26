@@ -233,8 +233,20 @@ async def complete_setup(query, context):
     # Створюємо стандартні категорії
     await setup_default_categories(user_id)
     
-    # Використовуємо уніфіковане головне меню
-    from handlers.main_menu import show_main_menu
+    keyboard = [
+        [
+            InlineKeyboardButton("💰 Мій бюджет", callback_data="my_budget"),
+            InlineKeyboardButton("➕ Додати операцію", callback_data="add_transaction")
+        ],
+        [
+            InlineKeyboardButton("📊 Аналітика", callback_data="analytics"),
+            InlineKeyboardButton("⚙️ Налаштування", callback_data="settings")
+        ],
+        [
+            InlineKeyboardButton("❓ Допомога", callback_data="help")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(
         "🎉 *Налаштування бота успішно завершено!*\n\n"
@@ -247,11 +259,9 @@ async def complete_setup(query, context):
         "• Перегляньте аналітику в розділі 'Мій бюджет'\n"
         "• Налаштуйте категорії в розділі 'Налаштування'\n\n"
         "Дякуємо, що обрали нашого бота для керування фінансами! 💼",
-        parse_mode='Markdown'
+        parse_mode='Markdown',
+        reply_markup=reply_markup
     )
-    
-    # Показуємо головне меню
-    await show_main_menu(query, context, is_query=True)
     
     return ConversationHandler.END
 
@@ -260,8 +270,8 @@ async def setup_default_categories(user_id):
     user = get_or_create_user(user_id)
     
     categories = get_user_categories(user.id)
-    expense_categories = [c for c in categories if c.type == TransactionType.EXPENSE.value]
-    income_categories = [c for c in categories if c.type == TransactionType.INCOME.value]
+    expense_categories = [c for c in categories if c.type == TransactionType.EXPENSE]
+    income_categories = [c for c in categories if c.type == TransactionType.INCOME]
     
     # Формуємо список стандартних категорій витрат
     standard_expense_categories = [
@@ -301,7 +311,7 @@ async def setup_default_categories(user_id):
                 category = Category(
                     user_id=user.id,
                     name=name,
-                    type=TransactionType.EXPENSE.value,
+                    type=TransactionType.EXPENSE,
                     icon=emoji
                 )
                 session.add(category)
@@ -311,7 +321,7 @@ async def setup_default_categories(user_id):
                 category = Category(
                     user_id=user.id,
                     name=name,
-                    type=TransactionType.INCOME.value,
+                    type=TransactionType.INCOME,
                     icon=emoji
                 )
                 session.add(category)

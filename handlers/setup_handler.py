@@ -43,26 +43,8 @@ async def start_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("🚀 Налаштувати бота", callback_data="setup_initial_balance")
             ]
         ]
-    else:
-        # Якщо бот вже налаштований, показуємо стандартні кнопки
-        keyboard = [
-            [
-                InlineKeyboardButton("💰 Мій бюджет", callback_data="my_budget"),
-                InlineKeyboardButton("➕ Додати операцію", callback_data="add_transaction")
-            ],
-            [
-                InlineKeyboardButton("📊 Аналітика", callback_data="reports"),
-                InlineKeyboardButton("⚙️ Налаштування", callback_data="settings")
-            ],
-            [
-                InlineKeyboardButton("❓ Допомога", callback_data="help")
-            ]
-        ]
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    # Визначаємо повідомлення в залежності від стану налаштування
-    if not is_setup_complete:
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         # Привітання для нових користувачів
         message_text = (
             f"👋 *Вітаємо, {first_name}, у FinAssist!*\n\n"
@@ -78,9 +60,18 @@ async def start_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "1️⃣ Встановити початковий баланс\n"
             "2️⃣ Вказати місячний бюджет\n\n"
         )
+        
+        await update.message.reply_text(
+            message_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
     else:
+        # Для вже налаштованих користувачів показуємо привітання і головне меню через єдину функцію
+        from handlers.main_menu import show_main_menu
+        
         # Привітання для вже налаштованих користувачів
-        message_text = (
+        welcome_message = (
             f"👋 *З поверненням, {first_name}!*\n\n"
             "*Ваш особистий помічник для контролю фінансів*\n\n"
             "*Основні функції бота:*\n"
@@ -91,12 +82,15 @@ async def start_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📌 *⚙️ Налаштування* — персоналізація бота під ваші потреби\n\n"
             "*Порада:* Почніть з розділу 'Мій бюджет', а потім додайте перші операції!"
         )
-    
-    await update.message.reply_text(
-        message_text,
-        parse_mode='Markdown',
-        reply_markup=reply_markup
-    )
+        
+        # Відправляємо привітання
+        await update.message.reply_text(
+            welcome_message,
+            parse_mode='Markdown'
+        )
+        
+        # Показуємо головне меню через єдину функцію
+        await show_main_menu(update.message, context, is_query=False)
     return ConversationHandler.END
 
 async def setup_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):

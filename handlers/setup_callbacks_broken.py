@@ -4,6 +4,29 @@ from database.db_operations import get_user, get_or_create_user, get_user_catego
 from database.session import Session
 from database.models import User, Category, TransactionType, Transaction
 from datetime import datetime
+        ("Одяг", "👚"),
+        ("Здоров'я", "🏥"),
+        ("Освіта", "📚"),
+        ("Техніка", "📱"),
+        ("Кафе та ресторани", "☕"),
+        ("Спорт", "🏃"),
+        ("Подарунки", "🎁"),
+        ("Краса", "💄"),
+        ("Хобі", "🎨"),
+        ("Інше", "📦")
+    ]
+    
+    standard_income_categories = [
+        ("Зарплата", "💰"),
+        ("Фріланс", "💻"),
+        ("Подарунки", "🎁"),
+        ("Інвестиції", "📈"),
+        ("Продаж", "🏷️"),
+        ("Бонуси", "💎"),
+        ("Стипендія", "🎓"),
+        ("Інше", "💸")
+    ]egory, TransactionType, Transaction
+from datetime import datetime
 
 # Стани для ConversationHandler
 WAITING_CURRENCY_SELECTION = 1
@@ -194,8 +217,7 @@ async def process_initial_balance(update: Update, context: ContextTypes.DEFAULT_
         completion_message = (
             "🎉 *Налаштування успішно завершено!*\n\n"
             f"✅ Валюта: {currency_code} ({currency_symbol})\n"
-            f"✅ Початковий баланс: {balance} {currency_symbol}\n"
-            f"✅ Створено стандартні категорії\n\n"
+            f"✅ Початковий баланс: {balance} {currency_symbol}\n\n"
             "Тепер ви можете повноцінно користуватися усіма функціями бота FinAssist.\n\n"
             "*Що робити далі:*\n"
             "• Додайте ваші регулярні доходи і витрати\n"
@@ -230,15 +252,23 @@ async def complete_setup(query, context):
         user.setup_step = 'completed'
         session.commit()
     
-    # Створюємо стандартні категорії
-    await setup_default_categories(user_id)
-    
-    # Використовуємо уніфіковане головне меню
-    from handlers.main_menu import show_main_menu
+    keyboard = [
+        [
+            InlineKeyboardButton("💰 Мій бюджет", callback_data="my_budget"),
+            InlineKeyboardButton("➕ Додати операцію", callback_data="add_transaction")
+        ],
+        [
+            InlineKeyboardButton("📊 Аналітика", callback_data="analytics"),
+            InlineKeyboardButton("⚙️ Налаштування", callback_data="settings")
+        ],
+        [
+            InlineKeyboardButton("❓ Допомога", callback_data="help")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(
         "🎉 *Налаштування бота успішно завершено!*\n\n"
-        "✅ Створено стандартні категорії\n\n"
         "Тепер ви можете повноцінно користуватися усіма функціями бота FinAssist.\n\n"
         "Рекомендуємо почати з додавання ваших перших фінансових операцій, "
         "щоб ми могли надати вам корисну аналітику та поради.\n\n"
@@ -247,11 +277,9 @@ async def complete_setup(query, context):
         "• Перегляньте аналітику в розділі 'Мій бюджет'\n"
         "• Налаштуйте категорії в розділі 'Налаштування'\n\n"
         "Дякуємо, що обрали нашого бота для керування фінансами! 💼",
-        parse_mode='Markdown'
+        parse_mode='Markdown',
+        reply_markup=reply_markup
     )
-    
-    # Показуємо головне меню
-    await show_main_menu(query, context, is_query=True)
     
     return ConversationHandler.END
 
@@ -260,38 +288,28 @@ async def setup_default_categories(user_id):
     user = get_or_create_user(user_id)
     
     categories = get_user_categories(user.id)
-    expense_categories = [c for c in categories if c.type == TransactionType.EXPENSE.value]
-    income_categories = [c for c in categories if c.type == TransactionType.INCOME.value]
+    expense_categories = [c for c in categories if c.type == TransactionType.EXPENSE]
+    income_categories = [c for c in categories if c.type == TransactionType.INCOME]
     
-    # Формуємо список стандартних категорій витрат
+    # Формуємо список стандартних категорій
     standard_expense_categories = [
         ("Продукти", "🥗"),
         ("Транспорт", "🚌"),
         ("Житло", "🏠"),
-        ("Комунальні послуги", "⚡"),
+        ("Комунальні послуги", "��"),
         ("Розваги", "🎭"),
         ("Одяг", "👚"),
         ("Здоров'я", "🏥"),
         ("Освіта", "📚"),
-        ("Техніка", "📱"),
-        ("Кафе та ресторани", "☕"),
-        ("Спорт", "🏃"),
-        ("Подарунки", "🎁"),
-        ("Краса", "💄"),
-        ("Хобі", "🎨"),
-        ("Інше", "📦")
+        ("Техніка", "📱")
     ]
     
-    # Формуємо список стандартних категорій доходів
     standard_income_categories = [
         ("Зарплата", "💰"),
         ("Фріланс", "💻"),
         ("Подарунки", "🎁"),
         ("Інвестиції", "📈"),
-        ("Продаж", "🏷️"),
-        ("Бонуси", "💎"),
-        ("Стипендія", "🎓"),
-        ("Інше", "💸")
+        ("Продаж", "🏷️")
     ]
     
     # Додаємо стандартні категорії для користувача
@@ -301,7 +319,7 @@ async def setup_default_categories(user_id):
                 category = Category(
                     user_id=user.id,
                     name=name,
-                    type=TransactionType.EXPENSE.value,
+                    type=TransactionType.EXPENSE,
                     icon=emoji
                 )
                 session.add(category)
@@ -311,7 +329,7 @@ async def setup_default_categories(user_id):
                 category = Category(
                     user_id=user.id,
                     name=name,
-                    type=TransactionType.INCOME.value,
+                    type=TransactionType.INCOME,
                     icon=emoji
                 )
                 session.add(category)

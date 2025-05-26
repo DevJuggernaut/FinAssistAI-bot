@@ -268,3 +268,12 @@ def get_user(telegram_id):
     user = session.query(User).filter(User.telegram_id == telegram_id).first()
     session.close()
     return user
+
+def get_category_by_id(category_id):
+    """Отримує категорію за ID"""
+    session = Session()
+    try:
+        category = session.query(Category).filter(Category.id == category_id).first()
+        return category
+    finally:
+        session.close()

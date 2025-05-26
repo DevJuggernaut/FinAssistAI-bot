@@ -135,7 +135,7 @@ async def show_my_budget_overview(query, context):
             "❌ *Помилка*\n\n"
             "Не вдалося отримати фінансову інформацію.",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Головне меню", callback_data="main_menu")]
+                [InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")]
             ]),
             parse_mode="Markdown"
         )
@@ -237,7 +237,7 @@ async def show_my_budget_overview(query, context):
             InlineKeyboardButton("⚙️ Налаштування", callback_data="budget_settings")
         ],
         [
-            InlineKeyboardButton("🔙 Головне меню", callback_data="main_menu")
+            InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")
         ]
     ]
     
