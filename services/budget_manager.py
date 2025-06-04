@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, date, timedelta
 import calendar
-from database.models import Session, BudgetPlan, CategoryBudget, Transaction, Category, User
+from database.models import Session, BudgetPlan, CategoryBudget, Transaction, Category, User, TransactionType
 from database.db_operations import create_or_update_budget, get_user_categories, get_transactions
 from sqlalchemy import func
 
@@ -32,9 +32,20 @@ class BudgetManager:
                 .filter(CategoryBudget.budget_plan_id == budget.id) \
                 .all()
                 
+            # Створюємо копію budget як словник, щоб уникнути проблем з сесією
+            budget_dict = {
+                'id': budget.id,
+                'user_id': budget.user_id,
+                'name': budget.name,
+                'total_budget': budget.total_budget,
+                'start_date': budget.start_date,
+                'end_date': budget.end_date,
+                'created_at': budget.created_at
+            }
+                
             # Обчислюємо фактичні витрати по категоріям
             result = {
-                'budget': budget,
+                'budget': budget_dict,
                 'category_budgets': []
             }
             
@@ -43,9 +54,9 @@ class BudgetManager:
                 actual_spending = session.query(func.sum(Transaction.amount)) \
                     .filter(Transaction.user_id == self.user_id,
                             Transaction.category_id == cat_budget.category_id,
-                            Transaction.transaction_date >= budget.start_date,
-                            Transaction.transaction_date <= budget.end_date,
-                            Transaction.type == 'expense') \
+                            Transaction.transaction_date >= budget_dict['start_date'],
+                            Transaction.transaction_date <= budget_dict['end_date'],
+                            Transaction.type == TransactionType.EXPENSE) \
                     .scalar() or 0
                 
                 # Розраховуємо відсоток використання бюджету
@@ -68,14 +79,14 @@ class BudgetManager:
             # Обчислюємо загальні витрати
             total_spending = session.query(func.sum(Transaction.amount)) \
                 .filter(Transaction.user_id == self.user_id,
-                        Transaction.transaction_date >= budget.start_date,
-                        Transaction.transaction_date <= budget.end_date,
-                        Transaction.type == 'expense') \
+                        Transaction.transaction_date >= budget_dict['start_date'],
+                        Transaction.transaction_date <= budget_dict['end_date'],
+                        Transaction.type == TransactionType.EXPENSE) \
                 .scalar() or 0
                 
             result['total_spending'] = total_spending
-            result['total_remaining'] = budget.total_budget - total_spending
-            result['usage_percent'] = (total_spending / budget.total_budget) * 100 if budget.total_budget > 0 else 0
+            result['total_remaining'] = budget_dict['total_budget'] - total_spending
+            result['usage_percent'] = (total_spending / budget_dict['total_budget']) * 100 if budget_dict['total_budget'] > 0 else 0
             
             session.close()
             return result
@@ -157,8 +168,8 @@ class BudgetManager:
         
         # Визначаємо попередній період (місяць)
         current_budget = active_budget['budget']
-        current_start = current_budget.start_date
-        current_end = current_budget.end_date
+        current_start = current_budget['start_date']
+        current_end = current_budget['end_date']
         
         # Розраховуємо попередній період
         if current_start.month == 1:
@@ -179,9 +190,9 @@ class BudgetManager:
             func.sum(Transaction.amount).label('amount')
         ).join(Category, Transaction.category_id == Category.id) \
          .filter(Transaction.user_id == self.user_id,
-                Transaction.type == 'expense',
-                Transaction.transaction_date >= current_start,
-                Transaction.transaction_date <= current_end) \
+                Transaction.type == TransactionType.EXPENSE,
+                Transaction.transaction_date >= datetime.combine(current_start, datetime.min.time()),
+                Transaction.transaction_date <= datetime.combine(current_end, datetime.max.time())) \
          .group_by(Transaction.category_id, Category.name, Category.icon) \
          .all()
          
@@ -193,9 +204,9 @@ class BudgetManager:
             func.sum(Transaction.amount).label('amount')
         ).join(Category, Transaction.category_id == Category.id) \
          .filter(Transaction.user_id == self.user_id,
-                Transaction.type == 'expense',
-                Transaction.transaction_date >= prev_start,
-                Transaction.transaction_date <= prev_end) \
+                Transaction.type == TransactionType.EXPENSE,
+                Transaction.transaction_date >= datetime.combine(prev_start, datetime.min.time()),
+                Transaction.transaction_date <= datetime.combine(prev_end, datetime.max.time())) \
          .group_by(Transaction.category_id, Category.name, Category.icon) \
          .all()
          
@@ -269,13 +280,13 @@ class BudgetManager:
         # Сума всіх доходів
         total_income = session.query(func.sum(Transaction.amount)) \
             .filter(Transaction.user_id == self.user_id,
-                   Transaction.type == 'income') \
+                   Transaction.type == TransactionType.INCOME) \
             .scalar() or 0
             
         # Сума всіх витрат
         total_expenses = session.query(func.sum(Transaction.amount)) \
             .filter(Transaction.user_id == self.user_id,
-                   Transaction.type == 'expense') \
+                   Transaction.type == TransactionType.EXPENSE) \
             .scalar() or 0
             
         # Поточний баланс = початковий баланс + доходи - витрати
@@ -293,12 +304,23 @@ class BudgetManager:
             func.sum(Transaction.amount).label('spent_amount')
         ).join(Transaction, Category.id == Transaction.category_id) \
          .filter(Transaction.user_id == self.user_id,
-                Transaction.type == 'expense',
-                Transaction.transaction_date >= first_day,
-                Transaction.transaction_date <= last_day) \
+                Transaction.type == TransactionType.EXPENSE,
+                Transaction.transaction_date >= datetime.combine(first_day, datetime.min.time()),
+                Transaction.transaction_date <= datetime.combine(last_day, datetime.max.time())) \
          .group_by(Category.id, Category.name, Category.icon) \
          .order_by(func.sum(Transaction.amount).desc()) \
          .all()
+        
+        # Конвертуємо результати в простий список, щоб уникнути проблем з сесією
+        category_list = [
+            {
+                'category_id': cat.id,
+                'name': cat.name,
+                'icon': cat.icon,
+                'spent_amount': cat.spent_amount
+            }
+            for cat in category_balances
+        ]
         
         session.close()
         
@@ -308,15 +330,7 @@ class BudgetManager:
             'total_income': total_income,
             'total_expenses': total_expenses,
             'monthly_budget': user.monthly_budget,
-            'category_balances': [
-                {
-                    'category_id': cat.id,
-                    'name': cat.name,
-                    'icon': cat.icon,
-                    'spent_amount': cat.spent_amount
-                }
-                for cat in category_balances
-            ]
+            'category_balances': category_list
         }
 
     def get_budget_status(self):
@@ -397,34 +411,34 @@ class BudgetManager:
         # Обчислюємо доходи за поточний місяць
         monthly_income = session.query(func.sum(Transaction.amount)) \
             .filter(Transaction.user_id == self.user_id,
-                   Transaction.type == 'income',
-                   Transaction.transaction_date >= current_month_start,
-                   Transaction.transaction_date <= current_month_end) \
+                   Transaction.type == TransactionType.INCOME,
+                   Transaction.transaction_date >= datetime.combine(current_month_start, datetime.min.time()),
+                   Transaction.transaction_date <= datetime.combine(current_month_end, datetime.max.time())) \
             .scalar() or 0
         
         # Обчислюємо витрати за поточний місяць
         monthly_expenses = session.query(func.sum(Transaction.amount)) \
             .filter(Transaction.user_id == self.user_id,
-                   Transaction.type == 'expense',
-                   Transaction.transaction_date >= current_month_start,
-                   Transaction.transaction_date <= current_month_end) \
+                   Transaction.type == TransactionType.EXPENSE,
+                   Transaction.transaction_date >= datetime.combine(current_month_start, datetime.min.time()),
+                   Transaction.transaction_date <= datetime.combine(current_month_end, datetime.max.time())) \
             .scalar() or 0
         
         # Загальний баланс користувача
         total_income = session.query(func.sum(Transaction.amount)) \
             .filter(Transaction.user_id == self.user_id,
-                   Transaction.type == 'income') \
+                   Transaction.type == TransactionType.INCOME) \
             .scalar() or 0
             
         total_expenses = session.query(func.sum(Transaction.amount)) \
             .filter(Transaction.user_id == self.user_id,
-                   Transaction.type == 'expense') \
+                   Transaction.type == TransactionType.EXPENSE) \
             .scalar() or 0
             
         current_balance = (user.initial_balance or 0) + total_income - total_expenses
         
         # Залишок до кінця місяця
-        budget_total = user.monthly_budget or (active_budget['budget'].total_budget if active_budget else 0)
+        budget_total = user.monthly_budget or (active_budget['budget']['total_budget'] if active_budget else 0)
         remaining_budget = budget_total - monthly_expenses
         
         # Прогрес використання бюджету
@@ -482,7 +496,7 @@ class BudgetManager:
             'user_info': {
                 'currency': user.currency,
                 'has_active_budget': active_budget is not None,
-                'budget_plan_id': active_budget['budget'].id if active_budget else None
+                'budget_plan_id': active_budget['budget']['id'] if active_budget else None
             },
             
             # Активний бюджет (якщо є)
@@ -521,9 +535,9 @@ class BudgetManager:
             func.sum(Transaction.amount).label('total_amount')
         ).filter(
             Transaction.user_id == self.user_id,
-            Transaction.type == 'expense',
-            Transaction.transaction_date >= start_date,
-            Transaction.transaction_date <= today
+            Transaction.type == TransactionType.EXPENSE,
+            Transaction.transaction_date >= datetime.combine(start_date, datetime.min.time()),
+            Transaction.transaction_date <= datetime.combine(today, datetime.max.time())
         ).group_by(func.date(Transaction.transaction_date)) \
          .order_by(func.date(Transaction.transaction_date)) \
          .all()
@@ -585,7 +599,7 @@ class BudgetManager:
         # Отримуємо категорії користувача
         categories = session.query(Category).filter(
             Category.user_id == self.user_id,
-            Category.type == 'expense'
+            Category.type == TransactionType.EXPENSE
         ).all()
         
         if not categories:
@@ -669,9 +683,9 @@ class BudgetManager:
             func.sum(Transaction.amount).label('amount')
         ).filter(
             Transaction.user_id == self.user_id,
-            Transaction.type == 'expense',
-            Transaction.transaction_date >= prev_start,
-            Transaction.transaction_date <= prev_end
+            Transaction.type == TransactionType.EXPENSE,
+            Transaction.transaction_date >= datetime.combine(prev_start, datetime.min.time()),
+            Transaction.transaction_date <= datetime.combine(prev_end, datetime.max.time())
         ).group_by(Transaction.category_id).all()
         
         session.close()
@@ -855,9 +869,9 @@ class BudgetManager:
             # Загальні витрати за місяць
             total_expenses = session.query(func.sum(Transaction.amount)) \
                 .filter(Transaction.user_id == self.user_id,
-                       Transaction.type == 'expense',
-                       Transaction.transaction_date >= start_date,
-                       Transaction.transaction_date <= end_date) \
+                       Transaction.type == TransactionType.EXPENSE,
+                       Transaction.transaction_date >= datetime.combine(start_date, datetime.min.time()),
+                       Transaction.transaction_date <= datetime.combine(end_date, datetime.max.time())) \
                 .scalar() or 0
             
             # Витрати по категоріях
@@ -867,9 +881,9 @@ class BudgetManager:
                 func.sum(Transaction.amount).label('amount')
             ).join(Transaction, Category.id == Transaction.category_id) \
              .filter(Transaction.user_id == self.user_id,
-                    Transaction.type == 'expense',
-                    Transaction.transaction_date >= start_date,
-                    Transaction.transaction_date <= end_date) \
+                    Transaction.type == TransactionType.EXPENSE,
+                    Transaction.transaction_date >= datetime.combine(start_date, datetime.min.time()),
+                    Transaction.transaction_date <= datetime.combine(end_date, datetime.max.time())) \
              .group_by(Category.name, Category.icon) \
              .order_by(func.sum(Transaction.amount).desc()) \
              .limit(5) \

@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import calendar
 from sqlalchemy import func, extract
 from pathlib import Path
-from database.models import Session, Transaction, Category, User
+from database.models import Session, Transaction, Category, User, TransactionType
 from database.db_operations import get_monthly_stats, get_transactions
 
 # Настроюємо логування
@@ -71,7 +71,7 @@ class FinancialReport:
             ).join(Transaction, Transaction.category_id == Category.id
             ).filter(
                 Transaction.user_id == self.user_id,
-                Transaction.type == 'expense',
+                Transaction.type == TransactionType.EXPENSE,
                 Transaction.transaction_date.between(start_date, end_date)
             ).group_by(Category.name, Category.icon
             ).order_by(func.sum(Transaction.amount).desc()).all()
@@ -235,7 +235,7 @@ class FinancialReport:
                 query = self.session.query(func.sum(Transaction.amount)
                 ).filter(
                     Transaction.user_id == self.user_id,
-                    Transaction.type == 'expense',
+                    Transaction.type == TransactionType.EXPENSE,
                     Transaction.transaction_date.between(start_date, end_date)
                 )
                 
@@ -308,7 +308,7 @@ class FinancialReport:
                 Transaction.amount
             ).filter(
                 Transaction.user_id == self.user_id,
-                Transaction.type == 'expense',
+                Transaction.type == TransactionType.EXPENSE,
                 Transaction.transaction_date.between(start_date, end_date)
             ).all()
             
@@ -374,7 +374,7 @@ class FinancialReport:
                 Transaction.amount
             ).filter(
                 Transaction.user_id == self.user_id,
-                Transaction.type == 'expense',
+                Transaction.type == TransactionType.EXPENSE,
                 Transaction.transaction_date >= start_date
             ).all()
             
@@ -462,7 +462,7 @@ class FinancialReport:
                     func.sum(Transaction.amount)
                 ).filter(
                     Transaction.user_id == self.user_id,
-                    Transaction.type == 'expense',
+                    Transaction.type == TransactionType.EXPENSE,
                     Transaction.category_id == cat_id,
                     Transaction.transaction_date.between(start_date, end_date)
                 ).scalar() or 0
@@ -873,7 +873,7 @@ class FinancialReport:
                     'Дата': t.transaction_date.strftime('%d.%m.%Y'),
                     'Опис': t.description,
                     'Сума': t.amount,
-                    'Тип': 'Витрата' if t.type == 'expense' else 'Дохід',
+                    'Тип': 'Витрата' if t.type == TransactionType.EXPENSE else 'Дохід',
                     'Категорія': f"{t.category_name} {t.category_icon}"
                 })
             

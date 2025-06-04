@@ -1,4 +1,4 @@
-from database.models import Session, User, Category, Transaction, BudgetPlan, CategoryBudget, FinancialAdvice
+from database.models import Session, User, Category, Transaction, BudgetPlan, CategoryBudget, FinancialAdvice, TransactionType
 from sqlalchemy import func
 from datetime import datetime, timedelta
 import calendar
@@ -129,31 +129,34 @@ def get_monthly_stats(user_id, year=None, month=None):
     # Отримуємо суму витрат за місяць
     expenses = session.query(func.sum(Transaction.amount))\
         .filter(Transaction.user_id == user_id,
-                Transaction.type == 'expense',
+                Transaction.type == TransactionType.EXPENSE,
                 Transaction.transaction_date.between(start_date, end_date))\
         .scalar() or 0
     
     # Отримуємо суму доходів за місяць
     income = session.query(func.sum(Transaction.amount))\
         .filter(Transaction.user_id == user_id,
-                Transaction.type == 'income',
+                Transaction.type == TransactionType.INCOME,
                 Transaction.transaction_date.between(start_date, end_date))\
         .scalar() or 0
     
     # Отримуємо топ категорій витрат
-    top_categories = session.query(
+    top_categories_query = session.query(
             Category.name, 
             Category.icon,
             func.sum(Transaction.amount).label('total')
         )\
         .join(Transaction, Transaction.category_id == Category.id)\
         .filter(Transaction.user_id == user_id,
-                Transaction.type == 'expense',
+                Transaction.type == TransactionType.EXPENSE,
                 Transaction.transaction_date.between(start_date, end_date))\
         .group_by(Category.name, Category.icon)\
         .order_by(func.sum(Transaction.amount).desc())\
         .limit(5)\
         .all()
+    
+    # Конвертуємо результати в прості кортежі, щоб уникнути проблем з сесіями
+    top_categories = [(cat.name, cat.icon, cat.total) for cat in top_categories_query]
     
     session.close()
     
@@ -265,15 +268,23 @@ def create_or_update_budget(user_id, name, total_budget, start_date, end_date, c
 def get_user(telegram_id):
     """Отримує користувача за telegram_id"""
     session = Session()
-    user = session.query(User).filter(User.telegram_id == telegram_id).first()
-    session.close()
-    return user
+    try:
+        user = session.query(User).filter(User.telegram_id == telegram_id).first()
+        if user:
+            # Detach the object from session to avoid lazy loading issues
+            session.expunge(user)
+        return user
+    finally:
+        session.close()
 
 def get_category_by_id(category_id):
     """Отримує категорію за ID"""
     session = Session()
     try:
         category = session.query(Category).filter(Category.id == category_id).first()
+        if category:
+            # Detach the object from session to avoid lazy loading issues
+            session.expunge(category)
         return category
     finally:
         session.close()
