@@ -170,25 +170,9 @@ async def process_initial_balance(update: Update, context: ContextTypes.DEFAULT_
         currency_symbol = currency_symbols.get(currency_code, currency_code)
         
         # Показуємо повідомлення про успішне завершення налаштування
-        # Створюємо кнопки головного меню для завершення налаштування
-        keyboard = [
-            [
-                InlineKeyboardButton("💰 Мій бюджет", callback_data="my_budget")
-            ],
-            [
-                InlineKeyboardButton("💳 Додати транзакцію", callback_data="add_transaction")
-            ],
-            [
-                InlineKeyboardButton("📊 Аналітика", callback_data="analytics")
-            ],
-            [
-                InlineKeyboardButton("⚙️ Налаштування", callback_data="settings")
-            ],
-            [
-                InlineKeyboardButton("❓ Допомога", callback_data="help")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        # Використовуємо централізований генератор клавіатури головного меню
+        from handlers.main_menu import create_main_menu_keyboard
+        reply_markup = create_main_menu_keyboard()
         
         # Відправляємо єдине повідомлення про завершення налаштування з головним меню
         completion_message = (

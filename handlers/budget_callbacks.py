@@ -1,8 +1,12 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from datetime import datetime
 import calendar
+import logging
 
 from database.db_operations import get_or_create_user
+from services.report_generator import FinancialReport
+
+logger = logging.getLogger(__name__)
 
 async def create_budget_from_recommendations(query, context):
     """Створює бюджет на основі рекомендацій"""
@@ -149,11 +153,8 @@ async def show_my_budget_overview(query, context):
     balance = financial_status['current_balance']
     balance_emoji = "💰" if balance >= 0 else "📉"
     
-    message = f"💼 *Мій бюджет - детальний опис*\n\n"
-    message += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    message += f"{balance_emoji} *ЗАГАЛЬНИЙ БАЛАНС*\n"
-    message += f"🔢 `{balance:,.2f} {currency_symbol}`\n"
-    message += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    message = f"💼 *Огляд фінансів*\n\n"
+    message += f"{balance_emoji} *Ваш баланс:* `{balance:,.2f}{currency_symbol}`\n\n"
     
     # =============== ОГЛЯД ЗА ПОТОЧНИЙ МІСЯЦЬ ===============
     if comprehensive_status:
@@ -161,37 +162,45 @@ async def show_my_budget_overview(query, context):
         monthly_expenses = comprehensive_status['current_status']['monthly_expenses']
         difference = monthly_income - monthly_expenses
         
-        # Визначаємо статус різниці
+        # Визначаємо статус різниці з покращеними текстами
         if difference > 0:
-            diff_emoji = "💚"
-            diff_text = f"Економія: +{difference:.2f} {currency_symbol}"
+            diff_emoji = "✨"
+            diff_text = f"Ви зекономили: `+{difference:.2f}{currency_symbol}`"
         elif difference < 0:
-            diff_emoji = "🔴"
-            diff_text = f"Перевитрата: {difference:.2f} {currency_symbol}"
+            diff_emoji = "⚠️"
+            diff_text = f"Перевитрата: `{difference:.2f}{currency_symbol}`"
         else:
-            diff_emoji = "⚪"
-            diff_text = f"Рівновага: {difference:.2f} {currency_symbol}"
+            diff_emoji = "⚖️"
+            diff_text = f"Ідеальний баланс: `{difference:.2f}{currency_symbol}`"
     else:
         monthly_income = 0
         monthly_expenses = 0
         difference = 0
-        diff_emoji = "⚪"
-        diff_text = "Немає даних"
+        diff_emoji = "📊"
+        diff_text = "Почніть відстежувати фінанси"
     
-    message += "📊 *ОГЛЯД ЗА ПОТОЧНИЙ МІСЯЦЬ:*\n"
-    message += f"📈 Загальні доходи: `{monthly_income:,.2f} {currency_symbol}`\n"
-    message += f"📉 Загальні витрати: `{monthly_expenses:,.2f} {currency_symbol}`\n"
+    # Обчислюємо відсоток економії/перевитрати
+    # (мотиваційні статуси та підказки видалено за побажанням користувача)
+    savings_status = ""
+    diff_tip = ""
+    
+    message += "📊 *ФІНАНСОВИЙ ПІДСУМОК МІСЯЦЯ*\n"
+    message += f"⬆️ Доходи: `{monthly_income:,.2f}{currency_symbol}`\n"
+    message += f"⬇️ Витрати: `{monthly_expenses:,.2f}{currency_symbol}`\n"
+    message += f"───────────────────\n"
     message += f"{diff_emoji} {diff_text}\n\n"
     
     # =============== ЦЕНТРАЛЬНА ЧАСТИНА: ОСТАННІ ТРАНЗАКЦІЇ ===============
-    message += "📋 *ОСТАННІ ТРАНЗАКЦІЇ:*\n"
+    message += "� *ОСТАННІ ОПЕРАЦІЇ*\n"
     
     # Отримуємо останні 7 транзакцій
     recent_transactions = get_transactions(user.id, limit=7)
     
     if recent_transactions:
+        message += f"_Показано {len(recent_transactions)} останніх операцій:_\n\n"
+        
         for i, transaction in enumerate(recent_transactions):
-            # Форматуємо дату
+            # Форматуємо дату більш читабельно
             date_str = transaction.transaction_date.strftime("%d.%m")
             
             # Отримуємо категорію та її іконку
@@ -201,53 +210,62 @@ async def show_my_budget_overview(query, context):
                 category_name = transaction.category.name
                 category_icon = transaction.category.icon or "📋"
             
-            # Визначаємо колір та знак суми
+            # Визначаємо колір та знак суми з покращеним форматуванням
             if transaction.type.value == 'income':
-                amount_str = f"+{transaction.amount:,.0f} {currency_symbol}"
+                amount_str = f"+{transaction.amount:,.0f}{currency_symbol}"
                 amount_emoji = "🟢"
+                type_text = "доход"
             else:
-                amount_str = f"-{transaction.amount:,.0f} {currency_symbol}"
+                amount_str = f"-{transaction.amount:,.0f}{currency_symbol}"
                 amount_emoji = "🔴"
+                type_text = "витрата"
             
             # Обрізаємо опис якщо занадто довгий
             description = transaction.description or "Без опису"
-            if len(description) > 18:
-                description = description[:15] + "..."
+            if len(description) > 20:
+                description = description[:17] + "..."
             
-            message += f"• `{date_str}` {category_icon} *{description}*\n"
-            message += f"  {amount_emoji} `{amount_str}` • _{category_name}_\n"
+            # Форматуємо транзакцію більш читабельно
+            message += f"┌ `{date_str}` {category_icon} *{description}*\n"
+            message += f"└ {amount_emoji} `{amount_str}` • _{category_name}_\n\n"
         
-        message += "\n"
     else:
-        message += "_Транзакцій ще немає_\n"
-        message += "_Почніть додавати доходи та витрати_\n\n"
+        message += "🌟 *Почніть свій фінансовий шлях!*\n\n"
+        message += "💡 Додайте першу транзакцію, щоб:\n"
+        message += "• 📊 Відстежувати витрати та доходи\n"
+        message += "• 📈 Бачити фінансові тенденції\n"
+        message += "• 🎯 Досягати фінансових цілей\n"
+        message += "• 💰 Краще контролювати бюджет\n\n"
     
     # =============== НИЖНЯ ЧАСТИНА: ШВИДКІ ДІЇ ===============
-    # Клавіатура з швидкими діями
     keyboard = [
         [
-            InlineKeyboardButton("➕ Додати дохід", callback_data="add_income"),
-            InlineKeyboardButton("➖ Записати витрату", callback_data="add_expense")
+            InlineKeyboardButton("📊 Діаграма витрат", callback_data="show_expense_pie_chart"),
+            InlineKeyboardButton("📋 Історія операцій", callback_data="view_all_transactions")
         ],
         [
-            InlineKeyboardButton("📋 Переглянути всі операції", callback_data="view_all_transactions")
+            InlineKeyboardButton("➕ Додати операцію", callback_data="add_transaction")
         ],
         [
-            InlineKeyboardButton("📊 Детальна аналітика", callback_data="budget_detailed_view"),
-            InlineKeyboardButton("⚙️ Налаштування", callback_data="budget_settings")
-        ],
-        [
-            InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")
+            InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")
         ]
     ]
-    
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await query.edit_message_text(
-        message,
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
-    )
+
+    # Якщо попереднє повідомлення було фото, надсилаємо новий огляд
+    if hasattr(query.message, 'photo') and query.message.photo:
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=message,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+    else:
+        await query.edit_message_text(
+            message,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
 
 async def show_budget_detailed_view(query, context):
     """Детальний перегляд бюджету з категоріями"""
@@ -451,6 +469,110 @@ async def execute_budget_reset(query, context):
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
+
+async def show_expense_pie_chart(query, context):
+    """Показує кругову діаграму витрат по категоріях з огляду фінансів"""
+    try:
+        user = get_or_create_user(query.from_user.id)
+        if not user:
+            await query.edit_message_text("❌ Користувач не знайдений")
+            return
+        
+        # Створюємо звіт для генерації діаграми
+        financial_report = FinancialReport(user.id)
+        
+        # Генеруємо кругову діаграму за поточний місяць
+        chart_buffer, error = financial_report.generate_expense_pie_chart()
+        
+        if error or not chart_buffer:
+            await query.edit_message_text(
+                "📊 Немає даних для створення діаграми витрат\n\n" +
+                "💡 *Почніть додавати витрати, щоб побачити розподіл по категоріях*",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 До огляду", callback_data="my_budget_overview")
+                ]]),
+                parse_mode="Markdown"
+            )
+            return
+        
+        # Відправляємо діаграму з лаконічним і сучасним підписом
+        await context.bot.send_photo(
+            chat_id=query.message.chat_id,
+            photo=chart_buffer,
+            caption=(
+                "📊 *Розподіл витрат по категоріях*\n"
+            ),
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("💰 Доходи", callback_data="show_income_pie_chart")
+                ],
+                [
+                    InlineKeyboardButton("🔙 До огляду", callback_data="my_budget_overview")
+                ]
+            ])
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in show_expense_pie_chart: {str(e)}")
+        await query.edit_message_text(
+            "❌ Помилка створення діаграми\n\n" +
+            "Спробуйте пізніше або зверніться до підтримки.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 До огляду", callback_data="my_budget_overview")
+            ]]),
+            parse_mode="Markdown"
+        )
+
+async def show_income_pie_chart(query, context):
+    """Показує кругову діаграму доходів по категоріях"""
+    try:
+        user = get_or_create_user(query.from_user.id)
+        
+        # Створюємо звіт для генерації діаграми
+        financial_report = FinancialReport(user.id)
+        
+        # Генеруємо кругову діаграму доходів за поточний місяць
+        chart_buffer, error = financial_report.generate_income_pie_chart()
+        
+        if error or not chart_buffer:
+            await query.edit_message_text(
+                "📊 Немає даних для створення діаграми доходів\n\n" +
+                "💡 *Почніть додавати доходи, щоб побачити розподіл по джерелах*",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 До огляду", callback_data="my_budget_overview")
+                ]]),
+                parse_mode="Markdown"
+            )
+            return
+        
+        # Відправляємо діаграму з лаконічним підписом
+        await context.bot.send_photo(
+            chat_id=query.message.chat_id,
+            photo=chart_buffer,
+            caption=(
+                "💰 *Розподіл доходів по категоріях*\n"
+            ),
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("📊 Витрати", callback_data="show_expense_pie_chart")
+                ],
+                [
+                    InlineKeyboardButton("🔙 До огляду", callback_data="my_budget_overview")
+                ]
+            ])
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in show_income_pie_chart: {str(e)}")
+        await query.edit_message_text(
+            "❌ Помилка створення діаграми доходів",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 До огляду", callback_data="my_budget_overview")
+            ]]),
+            parse_mode="Markdown"
+        )
 
 def create_progress_bar(percentage, width=10):
     """Створює текстовий прогрес-бар"""

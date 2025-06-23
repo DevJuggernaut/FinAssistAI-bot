@@ -11,11 +11,13 @@ import uuid
 import logging
 import re
 
-from database.db_operations import get_or_create_user, get_monthly_stats, get_user_categories, get_user, get_user_transactions
+from database.db_operations import get_or_create_user, get_monthly_stats, get_user_categories, get_user, get_user_transactions, add_transaction
+from database.models import TransactionType
 from handlers.setup_callbacks import show_currency_selection, complete_setup
 from services.financial_advisor import get_financial_advice
 from handlers.budget_callbacks import create_budget_from_recommendations, show_budget_total_input
 from services.analytics_service import analytics_service
+from handlers.main_menu import back_to_main
 from handlers.transaction_handler import (
     show_add_transaction_menu, show_manual_transaction_type, 
     show_enhanced_expense_form, show_enhanced_income_form,
@@ -27,8 +29,17 @@ from handlers.transaction_handler import (
     show_photo_receipt_form, show_all_transactions,
     handle_transactions_pagination, handle_import_all_transactions,
     handle_edit_transactions, handle_cancel_import,
+    handle_start_receipt_photo_upload,
     handle_remove_duplicates, handle_set_import_period,
-    handle_back_to_preview, handle_period_selection
+    show_transaction_filters, reset_transactions_filters,
+    handle_period_filter, handle_type_filter, handle_category_filter,
+    show_privatbank_excel_guide, show_privatbank_statement_form, 
+    show_monobank_statement_form, show_monobank_pdf_guide, show_monobank_excel_guide, show_other_bank_statement_form,
+    handle_enhanced_add_transaction, handle_quick_amount_selection, show_quick_amount_buttons,
+    show_period_filter_menu, show_type_filter_menu,
+    handle_edit_single_transaction, handle_edit_amount, handle_edit_description,
+    handle_edit_category, handle_set_category, handle_delete_transaction, handle_confirm_delete,
+    handle_view_single_transaction
 )
 from handlers.placeholder_handlers import (
     show_help_menu, show_reports_menu, show_charts_menu,
@@ -54,11 +65,19 @@ from handlers.analytics_handler import (
     show_analytics_main_menu, show_expense_statistics, show_period_statistics,
     show_ai_recommendations, show_period_reports, show_period_comparison,
     show_detailed_categories, show_top_transactions, show_analytics_settings,
-    show_ai_savings_tips, show_ai_analysis_for_period, show_period_comparison_detail,
-    show_category_limits_settings, show_ai_budget_planning, show_savings_goals,
+    show_ai_savings_tips,
     show_auto_reports_settings, show_report_format_settings, show_goals_reminders_settings,
-    show_export_settings, show_custom_period_comparison, show_trend_analysis,
-    show_financial_insights, show_spending_heatmap, show_detailed_analysis_menu
+    show_export_settings,
+    # Нові спрощені функції аналітики
+    show_analytics_detailed, show_analytics_charts, show_analytics_insights_simple, show_analytics_forecast,
+    show_chart_data_type_selection, show_chart_period_selection, generate_simple_chart,
+    generate_pdf_report,
+    # Розширені функції аналітики
+    show_analytics_visualizations, show_spending_heatmap, show_cash_flow_chart,
+    show_analytics_trends, show_trends_analysis, show_financial_health_score, show_personal_insights
+)
+from handlers.ai_assistant_handler import (
+    show_ai_assistant_menu, handle_ai_advice, handle_ai_forecast, start_ai_question
 )
 
 logger = logging.getLogger(__name__)
@@ -80,7 +99,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Основні функції
         if callback_data == "stats" or callback_data == "show_stats":
-            await show_stats(query, context)
+            # Перенаправляємо стару кнопку "Статистика" на нову "Аналітика"
+            await show_analytics_main_menu(query, context)
         elif callback_data == "add_transaction":
             await show_add_transaction_menu(query, context)
         elif callback_data == "add_expense":
@@ -94,24 +114,468 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif callback_data == "analytics":
             await show_analytics_main_menu(query, context)
         
+        # AI-помічник
+        elif callback_data == "ai_assistant_menu":
+            await show_ai_assistant_menu(query, context)
+        elif callback_data == "ai_advice":
+            await handle_ai_advice(query, context)
+        elif callback_data == "ai_forecast":
+            await handle_ai_forecast(query, context)
+        elif callback_data == "ai_custom_question":
+            await start_ai_question(update, context)
+        elif callback_data == "accounts_menu":
+            from handlers.accounts_handler import show_accounts_menu
+            await show_accounts_menu(query, context)
+        elif callback_data == "accounts_list":
+            from handlers.accounts_handler import show_accounts_list
+            await show_accounts_list(query, context)
+        elif callback_data == "accounts_add":
+            from handlers.accounts_handler import show_add_account_form
+            await show_add_account_form(query, context)
+        elif callback_data == "accounts_transfer":
+            from handlers.accounts_handler import show_account_transfer
+            await show_account_transfer(query, context)
+        elif callback_data == "accounts_stats":
+            from handlers.accounts_handler import show_accounts_stats
+            await show_accounts_stats(query, context)
+        elif callback_data == "accounts_add_cash":
+            from handlers.accounts_handler import create_cash_account
+            await create_cash_account(query, context)
+        elif callback_data == "accounts_add_card":
+            from handlers.accounts_handler import create_card_account
+            await create_card_account(query, context)
+        elif callback_data == "accounts_add_bank":
+            from handlers.accounts_handler import create_bank_account
+            await create_bank_account(query, context)
+        elif callback_data == "accounts_add_savings":
+            from handlers.accounts_handler import create_savings_account
+            await create_savings_account(query, context)
+        elif callback_data == "accounts_add_investment":
+            from handlers.accounts_handler import create_investment_account
+            await create_investment_account(query, context)
+        elif callback_data == "accounts_add_crypto":
+            from handlers.accounts_handler import create_crypto_account
+            await create_crypto_account(query, context)
+        elif callback_data == "accounts_add_other":
+            from handlers.accounts_handler import create_other_account
+            await create_other_account(query, context)
+        elif callback_data == "accounts_use_default_name":
+            from handlers.accounts_handler import use_default_account_name
+            await use_default_account_name(query, context)
+        
         # Аналітичні функції - нова система
         elif callback_data == "analytics_expense_stats":
             await show_expense_statistics(query, context)
+        elif callback_data == "analytics_income_stats":
+            # Поки що перенаправляємо на загальну аналітику
+            await show_analytics_main_menu(query, context)
         elif callback_data == "analytics_ai_recommendations":
             await show_ai_recommendations(query, context)
-        elif callback_data == "analytics_period_reports":
-            await show_period_reports(query, context)
-        elif callback_data == "analytics_period_comparison":
-            await show_period_comparison(query, context)
-        elif callback_data == "analytics_detailed_analysis":
-            await show_detailed_analysis_menu(query, context)
-        elif callback_data == "analytics_settings":
-            await show_analytics_settings(query, context)
+        
+        # Нові спрощені функції аналітики
+        elif callback_data == "analytics_detailed":
+            await show_analytics_detailed(query, context)
+        elif callback_data == "analytics_charts":
+            await show_analytics_charts(query, context)
+        elif callback_data == "analytics_insights_simple":
+            await show_analytics_insights_simple(query, context)
+        elif callback_data == "analytics_forecast":
+            await show_analytics_forecast(query, context)
+        
+        # Прості графіки - перенаправляємо на нову систему вибору
+        elif callback_data == "chart_categories":
+            await show_chart_data_type_selection(query, context, "pie")
+        elif callback_data == "chart_timeline":
+            await show_chart_data_type_selection(query, context, "bar")
+        elif callback_data == "chart_weekdays":
+            await show_chart_data_type_selection(query, context, "bar")
+        elif callback_data == "chart_income_expense":
+            await show_chart_data_type_selection(query, context, "bar")
+        
+        # Нові графіки з вибором типу та періоду
+        elif callback_data == "chart_type_pie":
+            await show_chart_data_type_selection(query, context, "pie")
+        elif callback_data == "chart_type_bar":
+            await show_chart_data_type_selection(query, context, "bar")
+        elif callback_data.startswith("chart_data_"):
+            # Обробляємо вибір типу даних: chart_data_expenses_pie, chart_data_income_bar тощо
+            parts = callback_data.split("_")
+            data_type = parts[2]  # expenses, income, comparison
+            chart_type = parts[3]  # pie, bar
+            await show_chart_period_selection(query, context, chart_type, data_type)
+        elif callback_data.startswith("generate_chart_"):
+            # Обробляємо генерацію графіку: generate_chart_pie_expenses_month
+            parts = callback_data.split("_")
+            chart_type = parts[2]  # pie, bar
+            data_type = parts[3]   # expenses, income, comparison
+            period = parts[4]      # month, week, day
+            await generate_simple_chart(query, context, chart_type, data_type, period)
+        
+        # PDF звіт
+        elif callback_data == "generate_pdf_report":
+            await generate_pdf_report(query, context)
+        
+        # Нові розширені функції аналітики
+        elif callback_data == "analytics_visualizations":
+            await show_analytics_visualizations(query, context)
+        elif callback_data == "analytics_trends":
+            await show_analytics_trends(query, context)
+        elif callback_data == "analytics_health_score":
+            await show_financial_health_score(query, context)
+        elif callback_data == "analytics_insights":
+            await show_personal_insights(query, context)
+        
+        # Візуалізації
+        elif callback_data == "viz_spending_heatmap":
+            await show_spending_heatmap(query, context)
+        elif callback_data == "viz_cash_flow":
+            await show_cash_flow_chart(query, context)
+        elif callback_data == "viz_category_trends":
+            # Створюємо графік трендів категорій
+            user = get_user(query.from_user.id)
+            if user:
+                from services.advanced_analytics import advanced_analytics
+                from datetime import datetime, timedelta
+                now = datetime.now()
+                start_date = now - timedelta(days=30)
+                transactions = get_user_transactions(user.id, start_date=start_date, end_date=now)
+                
+                transaction_data = [
+                    {
+                        'transaction_date': t.transaction_date,
+                        'amount': t.amount,
+                        'type': t.type.value,
+                        'category_name': t.category.name if t.category else 'Без категорії'
+                    }
+                    for t in transactions
+                ]
+                
+                chart_buffer = advanced_analytics.create_category_trends_chart(transaction_data)
+                
+                await context.bot.send_photo(
+                    chat_id=query.message.chat_id,
+                    photo=chart_buffer,
+                    caption="📊 **Тренди витрат по категоріях**\n\nПоказує зміни витрат у топ-5 категоріях протягом часу.",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔙 До візуалізацій", callback_data="analytics_visualizations")
+                    ]])
+                )
+        elif callback_data == "viz_spending_patterns":
+            # Створюємо графік паттернів витрат
+            user = get_user(query.from_user.id)
+            if user:
+                from services.advanced_analytics import advanced_analytics
+                from datetime import datetime, timedelta
+                now = datetime.now()
+                start_date = now - timedelta(days=60)
+                transactions = get_user_transactions(user.id, start_date=start_date, end_date=now)
+                
+                transaction_data = [
+                    {
+                        'transaction_date': t.transaction_date,
+                        'amount': t.amount,
+                        'type': t.type.value
+                    }
+                    for t in transactions
+                ]
+                
+                chart_buffer = advanced_analytics.create_spending_patterns_chart(transaction_data)
+                
+                await context.bot.send_photo(
+                    chat_id=query.message.chat_id,
+                    photo=chart_buffer,
+                    caption="📅 **Паттерни витрат**\n\nАналіз витрат по днях тижня та місяцях для виявлення закономірностей.",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔙 До візуалізацій", callback_data="analytics_visualizations")
+                    ]])
+                )
+        elif callback_data == "viz_expense_donut":
+            # Створюємо пончикову діаграму
+            user = get_user(query.from_user.id)
+            if user:
+                from services.advanced_analytics import advanced_analytics
+                from datetime import datetime, timedelta
+                now = datetime.now()
+                start_date = now - timedelta(days=30)
+                transactions = get_user_transactions(user.id, start_date=start_date, end_date=now)
+                
+                transaction_data = [
+                    {
+                        'transaction_date': t.transaction_date,
+                        'amount': t.amount,
+                        'type': t.type.value,
+                        'category_name': t.category.name if t.category else 'Без категорії'
+                    }
+                    for t in transactions
+                ]
+                
+                chart_buffer = advanced_analytics.create_expense_distribution_donut(transaction_data)
+                
+                await context.bot.send_photo(
+                    chat_id=query.message.chat_id,
+                    photo=chart_buffer,
+                    caption="🍩 **Розподіл витрат**\n\nПончикова діаграма показує частку кожної категорії у загальних витратах.",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔙 До візуалізацій", callback_data="analytics_visualizations")
+                    ]])
+                )
+        elif callback_data == "viz_budget_vs_actual":
+            # Створюємо порівняння бюджету з фактом
+            user = get_user(query.from_user.id)
+            if user:
+                from services.advanced_analytics import advanced_analytics
+                from datetime import datetime, timedelta
+                now = datetime.now()
+                start_date = now - timedelta(days=90)  # 3 місяці для порівняння
+                transactions = get_user_transactions(user.id, start_date=start_date, end_date=now)
+                
+                transaction_data = [
+                    {
+                        'transaction_date': t.transaction_date,
+                        'amount': t.amount,
+                        'type': t.type.value
+                    }
+                    for t in transactions
+                ]
+                
+                chart_buffer = advanced_analytics.create_budget_vs_actual_chart(
+                    transaction_data, 
+                    user.monthly_budget
+                )
+                
+                await context.bot.send_photo(
+                    chat_id=query.message.chat_id,
+                    photo=chart_buffer,
+                    caption="💰 **Бюджет vs Фактичні витрати**\n\nПорівняння планованого бюджету з реальними витратами. Зелений = в межах бюджету, червоний = перевищення.",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔙 До візуалізацій", callback_data="analytics_visualizations")
+                    ]])
+                )
+        
+        # Тренди та прогнози
+        elif callback_data == "trends_analysis":
+            await show_trends_analysis(query, context)
+        elif callback_data == "trends_forecast":
+            # Показуємо прогноз витрат
+            user = get_user(query.from_user.id)
+            if user:
+                from services.trend_analyzer import trend_analyzer
+                from datetime import datetime, timedelta
+                now = datetime.now()
+                start_date = now - timedelta(days=60)
+                transactions = get_user_transactions(user.id, start_date=start_date, end_date=now)
+                
+                transaction_data = [
+                    {
+                        'transaction_date': t.transaction_date,
+                        'amount': t.amount,
+                        'type': t.type.value,
+                        'category_name': t.category.name if t.category else 'Без категорії'
+                    }
+                    for t in transactions
+                ]
+                
+                trends_result = trend_analyzer.analyze_spending_trends(transaction_data)
+                forecast = trends_result.get("forecast", {})
+                
+                if "error" in forecast:
+                    text = f"❌ {forecast['error']}"
+                else:
+                    text = "🔮 **Прогноз витрат**\n\n"
+                    if "monthly_forecast" in forecast:
+                        monthly = forecast["monthly_forecast"]
+                        weekly = forecast.get("weekly_forecast", 0)
+                        daily = forecast.get("daily_forecast", 0)
+                        current_trend = forecast.get("current_trend", "стабільний")
+                        
+                        text += f"📊 *Поточний тренд:* {current_trend}\n\n"
+                        text += f"📅 *Прогноз на день:* {daily:.2f} грн\n"
+                        text += f"📈 *Прогноз на тиждень:* {weekly:.2f} грн\n"
+                        text += f"📆 *Прогноз на місяць:* {monthly:.2f} грн\n\n"
+                        
+                        confidence = forecast.get("confidence_interval", {})
+                        if confidence:
+                            lower = confidence.get("lower", 0)
+                            upper = confidence.get("upper", 0)
+                            text += f"📏 *Довірчий інтервал:*\n"
+                            text += f"   Від {lower:.0f} до {upper:.0f} грн\n\n"
+                        
+                        text += f"🎯 *Базується на {forecast.get('based_on_days', 0)} днях даних*"
+                
+                await query.edit_message_text(
+                    text=text,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("📈 Аналіз трендів", callback_data="trends_analysis")],
+                        [InlineKeyboardButton("🔙 До трендів", callback_data="analytics_trends")]
+                    ]),
+                    parse_mode="Markdown"
+                )
+        elif callback_data == "trends_anomalies":
+            # Показуємо аномалії у витратах
+            user = get_user(query.from_user.id)
+            if user:
+                from services.trend_analyzer import trend_analyzer
+                from datetime import datetime, timedelta
+                now = datetime.now()
+                start_date = now - timedelta(days=60)
+                transactions = get_user_transactions(user.id, start_date=start_date, end_date=now)
+                
+                transaction_data = [
+                    {
+                        'transaction_date': t.transaction_date,
+                        'amount': t.amount,
+                        'type': t.type.value,
+                        'category_name': t.category.name if t.category else 'Без категорії'
+                    }
+                    for t in transactions
+                ]
+                
+                trends_result = trend_analyzer.analyze_spending_trends(transaction_data)
+                anomalies = trends_result.get("anomalies", [])
+                
+                text = "🔍 **Виявлені аномалії у витратах**\n\n"
+                
+                if not anomalies:
+                    text += "✅ Аномалій у витратах не виявлено!\nВаші витрати стабільні та передбачувані."
+                else:
+                    text += f"⚠️ Знайдено {len(anomalies)} аномальних днів:\n\n"
+                    for i, anomaly in enumerate(anomalies[:7], 1):
+                        emoji = "📈" if anomaly["type"] == "висока_витрата" else "📉"
+                        text += f"{emoji} *{anomaly['date']}*\n"
+                        text += f"   {anomaly['description']}\n\n"
+                    
+                    if len(anomalies) > 7:
+                        text += f"...та ще {len(anomalies) - 7} аномалій"
+                
+                await query.edit_message_text(
+                    text=text,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("📈 Аналіз трендів", callback_data="trends_analysis")],
+                        [InlineKeyboardButton("🔙 До трендів", callback_data="analytics_trends")]
+                    ]),
+                    parse_mode="Markdown"
+                )
+        elif callback_data == "trends_seasonality":
+            # Показуємо сезонні паттерни
+            user = get_user(query.from_user.id)
+            if user:
+                from services.trend_analyzer import trend_analyzer
+                from datetime import datetime, timedelta
+                now = datetime.now()
+                start_date = now - timedelta(days=60)
+                transactions = get_user_transactions(user.id, start_date=start_date, end_date=now)
+                
+                transaction_data = [
+                    {
+                        'transaction_date': t.transaction_date,
+                        'amount': t.amount,
+                        'type': t.type.value,
+                        'category_name': t.category.name if t.category else 'Без категорії'
+                    }
+                    for t in transactions
+                ]
+                
+                trends_result = trend_analyzer.analyze_spending_trends(transaction_data)
+                seasonality = trends_result.get("seasonality", {})
+                
+                text = "📊 **Сезонні паттерни витрат**\n\n"
+                
+                weekday_data = seasonality.get("weekday", {})
+                if weekday_data:
+                    most_expensive = weekday_data.get("most_expensive_day", "невідомо")
+                    cheapest = weekday_data.get("cheapest_day", "невідомо")
+                    
+                    text += f"📅 *Аналіз по днях тижня:*\n"
+                    text += f"💸 Найдорожчий день: {most_expensive}\n"
+                    text += f"💰 Найекономніший день: {cheapest}\n\n"
+                    
+                    weekend_vs_weekday = weekday_data.get("weekend_vs_weekday", {})
+                    if weekend_vs_weekday:
+                        weekend_avg = weekend_vs_weekday.get("weekend_avg", 0)
+                        weekday_avg = weekend_vs_weekday.get("weekday_avg", 0)
+                        
+                        if weekend_avg > weekday_avg:
+                            text += f"🎉 На вихідних витрачаєте більше: {weekend_avg:.2f} грн vs {weekday_avg:.2f} грн\n\n"
+                        else:
+                            text += f"💼 У робочі дні витрачаєте більше: {weekday_avg:.2f} грн vs {weekend_avg:.2f} грн\n\n"
+                
+                hourly_data = seasonality.get("hourly", {})
+                if hourly_data:
+                    peak_hour = hourly_data.get("peak_spending_hour", "невідомо")
+                    text += f"⏰ *Аналіз по годинах:*\n"
+                    text += f"🕐 Піковий час витрат: {peak_hour}\n"
+                    
+                    morning_avg = hourly_data.get("morning_avg", 0)
+                    evening_avg = hourly_data.get("evening_avg", 0)
+                    
+                    if morning_avg > 0 and evening_avg > 0:
+                        if morning_avg > evening_avg:
+                            text += f"🌅 Вранці витрачаєте більше: {morning_avg:.2f} vs {evening_avg:.2f} грн\n"
+                        else:
+                            text += f"🌆 Ввечері витрачаєте більше: {evening_avg:.2f} vs {morning_avg:.2f} грн\n"
+                
+                if not weekday_data and not hourly_data:
+                    text += "📭 Недостатньо даних для аналізу сезонності.\nДодайте більше транзакцій для детального аналізу."
+                
+                await query.edit_message_text(
+                    text=text,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("📈 Аналіз трендів", callback_data="trends_analysis")],
+                        [InlineKeyboardButton("🔙 До трендів", callback_data="analytics_trends")]
+                    ]),
+                    parse_mode="Markdown"
+                )
+        elif callback_data == "trends_insights":
+            # Показуємо інсайти тенденцій
+            user = get_user(query.from_user.id)
+            if user:
+                from services.trend_analyzer import trend_analyzer
+                from datetime import datetime, timedelta
+                now = datetime.now()
+                start_date = now - timedelta(days=60)
+                transactions = get_user_transactions(user.id, start_date=start_date, end_date=now)
+                
+                transaction_data = [
+                    {
+                        'transaction_date': t.transaction_date,
+                        'amount': t.amount,
+                        'type': t.type.value,
+                        'category_name': t.category.name if t.category else 'Без категорії'
+                    }
+                    for t in transactions
+                ]
+                
+                insights = trend_analyzer.get_spending_insights(transaction_data)
+                
+                text = "💡 **Інсайти про тенденції**\n\n"
+                text += "🧠 *Ключові висновки з аналізу ваших витрат:*\n\n"
+                
+                if insights:
+                    for i, insight in enumerate(insights, 1):
+                        text += f"{i}. {insight}\n\n"
+                else:
+                    text += "📭 Недостатньо даних для генерації інсайтів.\nДодайте більше транзакцій для отримання корисних висновків."
+                
+                await query.edit_message_text(
+                    text=text,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("📈 Аналіз трендів", callback_data="trends_analysis")],
+                        [InlineKeyboardButton("🔙 До трендів", callback_data="analytics_trends")]
+                    ]),
+                    parse_mode="Markdown"
+                )
         
         # Статистика витрат за періоди
         elif callback_data.startswith("expense_stats_"):
             period_type = callback_data.replace("expense_stats_", "")
             await show_period_statistics(query, context, period_type)
+        elif callback_data.startswith("income_stats_"):
+            # Поки що перенаправляємо на загальну аналітику
+            await show_analytics_main_menu(query, context)
         elif callback_data.startswith("detailed_categories_"):
             period_type = callback_data.replace("detailed_categories_", "")
             await show_detailed_categories(query, context, period_type)
@@ -216,6 +680,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif callback_data == "my_budget_overview":
             from handlers.budget_callbacks import show_my_budget_overview
             await show_my_budget_overview(query, context)
+        elif callback_data == "show_expense_pie_chart":
+            from handlers.budget_callbacks import show_expense_pie_chart
+            await show_expense_pie_chart(query, context)
+        elif callback_data == "show_income_pie_chart":
+            from handlers.budget_callbacks import show_income_pie_chart
+            await show_income_pie_chart(query, context)
         elif callback_data == "budget":
             await show_budget_menu(query, context)
         elif callback_data == "create_monthly_budget":
@@ -332,15 +802,21 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Додавання транзакцій - основне меню
         elif callback_data == "add_transaction":
-            await show_transaction_menu_enhanced(query, context)
+            await show_add_transaction_menu(query, context)
         elif callback_data == "manual_transaction_type":
-            await show_manual_type_enhanced(query, context)
+            await show_manual_transaction_type(query, context)
         elif callback_data == "upload_statement":
             await show_upload_statement_form(query, context)
         elif callback_data == "receipt_photo_soon":
             await show_receipt_photo_soon(query, context)
+        elif callback_data == "start_receipt_photo_upload":
+            await handle_start_receipt_photo_upload(query, context)
         elif callback_data == "notify_receipt_ready":
             await notify_receipt_ready(query, context)
+        elif callback_data == "confirm_receipt_add":
+            await handle_confirm_receipt_add(query, context)
+        elif callback_data == "back_to_main_menu":
+            await back_to_main(query, context)
         
         # Ручне додавання транзакцій
         elif callback_data == "manual_expense":
@@ -348,9 +824,35 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif callback_data == "manual_income":
             await show_enhanced_income_form(query, context)
         
+        # Обробка автоматичної категоризації
+        elif callback_data == "confirm_auto_category":
+            from handlers.transaction_handler import handle_confirm_auto_category
+            await handle_confirm_auto_category(query, context)
+        elif callback_data == "change_category":
+            from handlers.transaction_handler import handle_change_category
+            await handle_change_category(query, context)
+        elif callback_data.startswith("select_manual_category_"):
+            from handlers.transaction_handler import handle_manual_category_selection
+            await handle_manual_category_selection(query, context)
+        elif callback_data == "cancel_transaction":
+            from handlers.transaction_handler import handle_cancel_transaction
+            await handle_cancel_transaction(query, context)
+        
         # Вибір категорій та сум
         elif callback_data.startswith("expense_cat_") or callback_data.startswith("income_cat_"):
-            await handle_enhanced_add_transaction(query, context)
+            # Зберігаємо вибрану категорію в user_data
+            if callback_data.startswith("expense_cat_"):
+                context.user_data['transaction_type'] = 'expense'
+                context.user_data['category_id'] = callback_data.replace("expense_cat_", "")
+            else:
+                context.user_data['transaction_type'] = 'income'
+                context.user_data['category_id'] = callback_data.replace("income_cat_", "")
+            # Одразу просимо ввести суму вручну
+            await query.edit_message_text(
+                text="Введіть суму для цієї транзакції (наприклад, 150.50):",
+                parse_mode="Markdown"
+            )
+            context.user_data['awaiting_amount'] = True
         elif callback_data.startswith("quick_amount_"):
             await handle_quick_amount_selection(query, context)
         elif callback_data.startswith("manual_amount_"):
@@ -366,8 +868,131 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_upload_pdf_guide(query, context)
         elif callback_data == "upload_excel_guide":
             await show_upload_excel_guide(query, context)
+        elif callback_data == "privatbank_excel_guide":
+            await show_privatbank_excel_guide(query, context)
         elif callback_data == "upload_csv_guide":
             await show_upload_csv_guide(query, context)
+        elif callback_data == "upload_privatbank_excel_guide":
+            await show_upload_excel_guide(query, context)
+        # Вибір банку для виписки
+        elif callback_data == "select_bank_privatbank":
+            await show_privatbank_statement_form(query, context)
+        elif callback_data == "select_bank_monobank":
+            await show_monobank_statement_form(query, context)
+        elif callback_data == "select_bank_other":
+            await show_other_bank_statement_form(query, context)
+        elif callback_data == "privatbank_pdf_guide":
+            # PDF больше не поддерживается для ПриватБанка
+            await query.answer("❌ PDF файли більше не підтримуються для ПриватБанку. Будь ласка, використовуйте Excel формат.", show_alert=True)
+            await show_privatbank_statement_form(query, context)
+        elif callback_data == "monobank_csv_guide":
+            await show_upload_csv_guide(query, context)
+        elif callback_data == "monobank_pdf_guide":
+            await show_monobank_pdf_guide(query, context)
+        elif callback_data == "start_excel_upload":
+            # Визначаємо джерело файлу (якщо не встановлено, використовуємо ПриватБанк за замовчуванням)
+            file_source = context.user_data.get('file_source', 'privatbank')
+            
+            # Set context that we're expecting an Excel file
+            context.user_data['awaiting_file'] = 'excel'
+            if 'file_source' not in context.user_data:
+                context.user_data['file_source'] = 'privatbank'
+            
+            # Визначаємо текст та кнопку "Назад" залежно від банку
+            if file_source == 'monobank':
+                bank_text = "Monobank"
+                back_callback = "monobank_excel_guide"
+                back_text = "🔙 Назад до Monobank Excel"
+            else:  # privatbank або інше
+                bank_text = "ПриватБанку"
+                back_callback = "privatbank_excel_guide"
+                back_text = "🔙 Назад до формату файлу"
+            
+            # Відправляємо повідомлення з інструкціями
+            await query.edit_message_text(
+                text=f"📤 **Будь ласка, завантажте Excel файл з випискою**\n\n"
+                     f"1. Натисніть на скріпку 📎 або іконку вкладення\n"
+                     f"2. Оберіть 'File' або 'Document'\n"
+                     f"3. Знайдіть та виберіть файл Excel виписки з {bank_text}\n\n"
+                     f"⚠️ Важливо: файл має бути у форматі .xlsx або .xls розміром до 10 МБ\n\n"
+                     f"Щойно ви відправите файл, я розпочну його обробку.",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(back_text, callback_data=back_callback)]
+                ])
+            )
+        elif callback_data == "start_pdf_upload":
+            # Set context that we're expecting a PDF file
+            context.user_data['awaiting_file'] = 'pdf'
+            
+            # Визначаємо банк із контексту
+            bank_type = context.user_data.get('file_source', 'other')
+            bank_name = "ПриватБанку" if bank_type == 'privatbank' else "МоноБанку" if bank_type == 'monobank' else "вашого банку"
+            back_callback = f"{bank_type}_pdf_guide" if bank_type in ['privatbank', 'monobank'] else "upload_pdf_guide"
+            
+            # Відправляємо повідомлення з інструкціями
+            await query.edit_message_text(
+                text=f"📤 **Будь ласка, завантажте PDF файл з випискою з {bank_name}**\n\n"
+                     "1. Натисніть на скріпку 📎 або іконку вкладення\n"
+                     "2. Оберіть 'File' або 'Document'\n"
+                     "3. Знайдіть та виберіть PDF файл виписки\n\n"
+                     "⚠️ Важливо: файл має бути у форматі .pdf розміром до 10 МБ\n\n"
+                     "Щойно ви відправите файл, я розпочну його обробку.",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 Назад", callback_data=back_callback)]
+                ])
+            )
+        elif callback_data == "start_csv_upload":
+            # Set context that we're expecting a CSV file from MonoBank
+            context.user_data['awaiting_file'] = 'csv'
+            context.user_data['file_source'] = 'monobank'
+            
+            # Відправляємо повідомлення з інструкціями
+            await query.edit_message_text(
+                text="📤 **Будь ласка, завантажте CSV файл з випискою з МоноБанку**\n\n"
+                     "1. Натисніть на скріпку 📎 або іконку вкладення\n"
+                     "2. Оберіть 'File' або 'Document'\n"
+                     "3. Знайдіть та виберіть CSV файл виписки\n\n"
+                     "⚠️ Важливо: файл має бути у форматі .csv розміром до 10 МБ\n\n"
+                     "Щойно ви відправите файл, я розпочну його обробку.",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 Назад", callback_data="monobank_csv_guide")]
+                ])
+            )
+        elif callback_data == "monobank_excel_guide":
+            await show_monobank_excel_guide(query, context)
+        elif callback_data == "start_monobank_excel_upload":
+            # Set context that we're expecting an Excel file from Monobank
+            context.user_data['awaiting_file'] = 'excel'
+            context.user_data['file_source'] = 'monobank'
+            
+            # Відправляємо повідомлення з інструкціями
+            await query.edit_message_text(
+                text="📤 **Будь ласка, завантажте Excel файл з випискою Monobank**\n\n"
+                     "1. Натисніть на скріпку 📎 або іконку вкладення\n"
+                     "2. Оберіть 'File' або 'Document'\n"
+                     "3. Знайдіть та виберіть файл Excel виписки з Monobank\n\n"
+                     "📊 **Підтримувані формати**: .xls, .xlsx\n"
+                     "⚠️ **Максимальний розмір**: 5 МБ\n\n"
+                     "_Очікую на ваш файл..._",
+                parse_mode="Markdown"
+            )
+        
+        # Графіки для витрат
+        elif callback_data.startswith("expense_chart_"):
+            parts = callback_data.split("_")
+            chart_type = parts[2]
+            period_type = parts[3]
+            await generate_expense_chart(query, context, chart_type, period_type)
+            
+        # Графіки для доходів
+        elif callback_data.startswith("income_chart_"):
+            parts = callback_data.split("_")
+            chart_type = parts[2]
+            period_type = parts[3]
+            await generate_income_chart(query, context, chart_type, period_type)
         
         # Застарілі обробники (для сумісності)
         elif callback_data.startswith("add_"):
@@ -376,961 +1001,247 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif callback_data == "add_income":
                 await show_enhanced_income_form(query, context)
         elif callback_data == "manual_transaction":
-            await show_manual_type_enhanced(query, context)
+            await show_manual_transaction_type(query, context)
         elif callback_data == "photo_receipt":
             await show_receipt_photo_soon(query, context)
         
         # Перегляд транзакцій
         elif callback_data == "view_all_transactions":
+            # Використовуємо helper функцію для переадресації
             await show_all_transactions(query, context)
+        elif callback_data == "import_all_transactions":
+            await handle_import_all_transactions(query, context)
         elif callback_data == "prev_transactions_page":
             await handle_transactions_pagination(query, context, direction="prev")
         elif callback_data == "next_transactions_page":
             await handle_transactions_pagination(query, context, direction="next")
+        elif callback_data == "transaction_filters":
+            await show_transaction_filters(query, context)
+        elif callback_data == "reset_transactions_filters":
+            await reset_transactions_filters(query, context)
+        elif callback_data == "apply_filters":
+            # Застосовуємо фільтри та показуємо відфільтровані транзакції
+            # Синхронізуємо фільтри з view_params перед показом
+            filters = context.user_data.get('transaction_filters', {})
+            view_params = context.user_data.get('transactions_view', {})
+            
+            # Оновлюємо view_params на основі фільтрів
+            view_params['period'] = filters.get('period', 'month')
+            view_params['type'] = filters.get('type', 'all') if filters.get('type', 'all') != 'all' else None
+            view_params['category_id'] = filters.get('category', 'all') if filters.get('category', 'all') != 'all' else None
+            view_params['page'] = 1  # Скидаємо на першу сторінку
+            
+            context.user_data['transactions_view'] = view_params
+            
+            await query.answer("✅ Показую транзакції з обраними фільтрами")
+            await show_all_transactions(query, context)
+        elif callback_data == "filter_period":
+            await show_period_filter_menu(query, context)
+        elif callback_data == "filter_type":
+            await show_type_filter_menu(query, context)
+        elif callback_data == "filter_category":
+            await handle_category_filter(query, context)
+        elif callback_data == "back_to_transactions":
+            await show_all_transactions(query, context)
         
-        # Обробка імпорту транзакцій з виписок
-        elif callback_data == "confirm_parsed_transactions":
-            await handle_import_all_transactions(query, context)
-        elif callback_data == "edit_parsed_transactions":
+        # Обробники періодів
+        elif callback_data == "period_day":
+            if 'transaction_filters' not in context.user_data:
+                context.user_data['transaction_filters'] = {}
+            context.user_data['transaction_filters']['period'] = 'day'
+            if 'transactions_view' not in context.user_data:
+                context.user_data['transactions_view'] = {}
+            context.user_data['transactions_view']['period'] = 'day'
+            context.user_data['transactions_view']['page'] = 1
+            await query.answer("✅ Фільтр періоду застосовано")
+            await show_transaction_filters(query, context)
+        elif callback_data == "period_week":
+            if 'transaction_filters' not in context.user_data:
+                context.user_data['transaction_filters'] = {}
+            context.user_data['transaction_filters']['period'] = 'week'
+            if 'transactions_view' not in context.user_data:
+                context.user_data['transactions_view'] = {}
+            context.user_data['transactions_view']['period'] = 'week'
+            context.user_data['transactions_view']['page'] = 1
+            await query.answer("✅ Фільтр періоду застосовано")
+            await show_transaction_filters(query, context)
+        elif callback_data == "period_month":
+            if 'transaction_filters' not in context.user_data:
+                context.user_data['transaction_filters'] = {}
+            context.user_data['transaction_filters']['period'] = 'month'
+            if 'transactions_view' not in context.user_data:
+                context.user_data['transactions_view'] = {}
+            context.user_data['transactions_view']['period'] = 'month'
+            context.user_data['transactions_view']['page'] = 1
+            await query.answer("✅ Фільтр періоду застосовано")
+            await show_transaction_filters(query, context)
+        elif callback_data == "period_year":
+            if 'transaction_filters' not in context.user_data:
+                context.user_data['transaction_filters'] = {}
+            context.user_data['transaction_filters']['period'] = 'year'
+            if 'transactions_view' not in context.user_data:
+                context.user_data['transactions_view'] = {}
+            context.user_data['transactions_view']['period'] = 'year'
+            context.user_data['transactions_view']['page'] = 1
+            await query.answer("✅ Фільтр періоду застосовано")
+            await show_transaction_filters(query, context)
+        elif callback_data == "period_all":
+            if 'transaction_filters' not in context.user_data:
+                context.user_data['transaction_filters'] = {}
+            context.user_data['transaction_filters']['period'] = 'all'
+            if 'transactions_view' not in context.user_data:
+                context.user_data['transactions_view'] = {}
+            context.user_data['transactions_view']['period'] = 'all'
+            context.user_data['transactions_view']['page'] = 1
+            await query.answer("✅ Фільтр періоду застосовано")
+            await show_transaction_filters(query, context)
+        
+        # Обробники типів
+        elif callback_data == "type_all":
+            if 'transaction_filters' not in context.user_data:
+                context.user_data['transaction_filters'] = {}
+            context.user_data['transaction_filters']['type'] = 'all'
+            if 'transactions_view' not in context.user_data:
+                context.user_data['transactions_view'] = {}
+            context.user_data['transactions_view']['type'] = None
+            context.user_data['transactions_view']['page'] = 1
+            await query.answer("✅ Фільтр типу застосовано")
+            await show_transaction_filters(query, context)
+        elif callback_data == "type_income":
+            if 'transaction_filters' not in context.user_data:
+                context.user_data['transaction_filters'] = {}
+            context.user_data['transaction_filters']['type'] = 'income'
+            if 'transactions_view' not in context.user_data:
+                context.user_data['transactions_view'] = {}
+            context.user_data['transactions_view']['type'] = 'income'
+            context.user_data['transactions_view']['page'] = 1
+            await query.answer("✅ Фільтр типу застосовано")
+            await show_transaction_filters(query, context)
+        elif callback_data == "type_expense":
+            if 'transaction_filters' not in context.user_data:
+                context.user_data['transaction_filters'] = {}
+            context.user_data['transaction_filters']['type'] = 'expense'
+            if 'transactions_view' not in context.user_data:
+                context.user_data['transactions_view'] = {}
+            context.user_data['transactions_view']['type'] = 'expense'
+            context.user_data['transactions_view']['page'] = 1
+            await query.answer("✅ Фільтр типу застосовано")
+            await show_transaction_filters(query, context)
+        
+        # Обробники категорій
+        elif callback_data == "category_all":
+            if 'transaction_filters' not in context.user_data:
+                context.user_data['transaction_filters'] = {}
+            context.user_data['transaction_filters']['category'] = 'all'
+            if 'transactions_view' not in context.user_data:
+                context.user_data['transactions_view'] = {}
+            context.user_data['transactions_view']['category_id'] = None
+            context.user_data['transactions_view']['page'] = 1
+            await query.answer("✅ Фільтр за категорією застосовано")
+            await show_transaction_filters(query, context)
+        elif callback_data.startswith("category_") and callback_data != "category_all":
+            try:
+                category_id = int(callback_data.split("_")[1])
+                if 'transaction_filters' not in context.user_data:
+                    context.user_data['transaction_filters'] = {}
+                context.user_data['transaction_filters']['category'] = category_id
+                if 'transactions_view' not in context.user_data:
+                    context.user_data['transactions_view'] = {}
+                context.user_data['transactions_view']['category_id'] = category_id
+                context.user_data['transactions_view']['page'] = 1
+                await query.answer("✅ Фільтр за категорією застосовано")
+                await show_transaction_filters(query, context)
+            except ValueError:
+                await query.answer("Неправильний формат ID категорії")
+        
+        # Обробники редагування транзакцій
+        elif callback_data == "edit_transactions":
             await handle_edit_transactions(query, context)
-        elif callback_data == "cancel_import":
-            await handle_cancel_import(query, context)
-        elif callback_data == "remove_duplicates":
-            await handle_remove_duplicates(query, context)
-        elif callback_data == "set_import_period":
-            await handle_set_import_period(query, context)
-        elif callback_data == "back_to_preview":
-            await handle_back_to_preview(query, context)
-        elif callback_data.startswith("period_"):
-            await handle_period_selection(query, context)
-        elif callback_data == "back_to_preview":
-            await handle_back_to_preview(query, context)
-        elif callback_data.startswith("period_"):
-            await handle_period_selection(query, context)
-        
-        # Аналіз
-        elif callback_data.startswith('analyze_'):
-            await handle_analysis_callback(query, user)
-        
-        # Створення нових категорій
-        elif callback_data == "add_expense_category":
-            await show_add_expense_category_form(query, context)
-        elif callback_data == "add_income_category":
-            await show_add_income_category_form(query, context)
-        
-        # Додаткові функції, які поки що в розробці
-        elif callback_data in ["stats_daily", "stats_weekly", "stats_monthly", "income_analysis", 
-                              "expense_analysis", "chart_expense_pie", "chart_income_expense", 
-                              "chart_expense_trend", "chart_heatmap", "chart_patterns",
-                              "add_category", "edit_categories", "delete_category",
-                              "notification_settings", "currency_settings", "language_settings",
-                              "report_format_settings", "sync_settings", "other_settings",
-                              "budget_detailed_view", "budget_settings"]:
-            await query.edit_message_text(
-                f"🚧 *Функція в розробці*\n\n"
-                f"Дана функція знаходиться в активній розробці та буде доступна в наступних оновленнях.\n\n"
-                f"Дякуємо за терпіння! 🙏",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]]),
-                parse_mode="Markdown"
-            )
-        
-        # Неімплементована функція
+        elif callback_data.startswith("view_transaction_"):
+            await handle_view_single_transaction(query, context)
+        elif callback_data.startswith("edit_transaction_"):
+            await handle_edit_single_transaction(query, context)
+        elif callback_data.startswith("edit_amount_"):
+            await handle_edit_amount(query, context)
+        elif callback_data.startswith("edit_description_"):
+            await handle_edit_description(query, context)
+        elif callback_data.startswith("edit_category_"):
+            await handle_edit_category(query, context)
+        elif callback_data.startswith("set_category_"):
+            await handle_set_category(query, context)
+        elif callback_data.startswith("delete_transaction_"):
+            await handle_delete_transaction(query, context)
+        elif callback_data.startswith("confirm_delete_"):
+            await handle_confirm_delete(query, context)
+            
+        # Загальний обробник для невідомих колбеків
         else:
             await query.edit_message_text(
                 f"🚧 *Функція '{callback_data}' знаходиться в розробці*\n\n"
                 f"Дана функція буде доступна в наступних оновленнях бота.\n\n"
                 f"Скористайтеся доступними функціями через головне меню.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")]]),
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]]),
                 parse_mode="Markdown"
             )
     except Exception as e:
-        logger.error(f"Error handling callback: {str(e)}")
-        if query:
+        logger.error(f"Error in handle_callback: {e}")
+        await query.answer("Виникла помилка, будь ласка, спробуйте ще раз пізніше.", show_alert=True)
+
+
+async def handle_confirm_receipt_add(query, context):
+    """Обробляє підтвердження додавання транзакції з чека"""
+    try:
+        user = get_user(query.from_user.id)
+        if not user:
+            await query.edit_message_text("Будь ласка, спочатку налаштуйте бота командою /start")
+            return
+
+        # Отримуємо збережені дані чека
+        pending_receipt = context.user_data.get('pending_receipt')
+        if not pending_receipt:
             await query.edit_message_text(
-                text="Виникла помилка при обробці запиту.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Назад", callback_data="back_to_main")]])
+                "❌ Дані чека не знайдено. Спробуйте завантажити чек ще раз.",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")
+                ]])
             )
-
-async def handle_analysis_callback(query, user):
-    """Обробка колбеків аналізу"""
-    try:
-        # Отримуємо транзакції за останні 3 місяці
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=90)
-        transactions = get_user_transactions(user.id, start_date, end_date)
-        
-        if query.data == 'analyze_categories':
-            # Аналіз категорій
-            report = analytics_service.generate_custom_report(
-                transactions,
-                'category_analysis'
-            )
-            
-            # Відправляємо статистику
-            stats = report['statistics']
-            await query.message.reply_text(
-                "📊 Аналіз категорій витрат\n\n" +
-                "\n".join(
-                    f"• {category}: {data['sum']:.2f} (середнє: {data['mean']:.2f}, кількість: {data['count']})"
-                    for category, data in stats.items()
-                )
-            )
-            
-            # Відправляємо графік
-            if report['visualization']:
-                await query.message.reply_photo(
-                    photo=report['visualization'],
-                    caption="Розподіл витрат за категоріями"
-                )
-        
-        elif query.data == 'analyze_trends':
-            # Аналіз трендів
-            report = analytics_service.generate_custom_report(
-                transactions,
-                'trend_analysis',
-                'monthly'
-            )
-            
-            # Відправляємо статистику
-            stats = report['statistics']
-            await query.message.reply_text(
-                "📈 Тренди витрат\n\n" +
-                "\n".join(
-                    f"• Місяць {month}: {data['sum']:.2f} (середнє: {data['mean']:.2f}, кількість: {data['count']})"
-                    for month, data in stats.items()
-                )
-            )
-            
-            # Відправляємо графік
-            if report['visualization']:
-                await query.message.reply_photo(
-                    photo=report['visualization'],
-                    caption="Тренди витрат по місяцях"
-                )
-        
-        elif query.data == 'analyze_budget':
-            # Аналіз бюджету
-            report = analytics_service.generate_custom_report(
-                transactions,
-                'budget_analysis'
-            )
-            
-            # Відправляємо статистику
-            stats = report['statistics']
-            await query.message.reply_text(
-                "💰 Аналіз бюджету\n\n" +
-                "\n".join(
-                    f"• {category}:\n"
-                    f"  - Фактично: {data['amount']:.2f}\n"
-                    f"  - Бюджет: {data['budget']:.2f}\n"
-                    f"  - Використання: {data['utilization']:.1f}%"
-                    for category, data in stats.items()
-                )
-            )
-            
-            # Відправляємо графік
-            if report['visualization']:
-                await query.message.reply_photo(
-                    photo=report['visualization'],
-                    caption="Порівняння фактичних витрат з бюджетом"
-                )
-        
-        elif query.data == 'analyze_full':
-            # Повний аналіз
-            # Генеруємо всі типи звітів
-            category_report = analytics_service.generate_custom_report(
-                transactions,
-                'category_analysis'
-            )
-            trend_report = analytics_service.generate_custom_report(
-                transactions,
-                'trend_analysis',
-                'monthly'
-            )
-            budget_report = analytics_service.generate_custom_report(
-                transactions,
-                'budget_analysis'
-            )
-            
-            # Відправляємо загальний підсумок
-            await query.message.reply_text(
-                "📊 Повний фінансовий аналіз\n\n"
-                "Аналіз включає:\n"
-                "• Розподіл витрат за категоріями\n"
-                "• Тренди витрат по місяцях\n"
-                "• Порівняння з бюджетом\n\n"
-                "Детальні графіки будуть надіслані наступними повідомленнями."
-            )
-            
-            # Відправляємо всі графіки
-            for report, title in [
-                (category_report, "Розподіл витрат за категоріями"),
-                (trend_report, "Тренди витрат по місяцях"),
-                (budget_report, "Порівняння з бюджетом")
-            ]:
-                if report['visualization']:
-                    await query.message.reply_photo(
-                        photo=report['visualization'],
-                        caption=title
-                    )
-    except Exception as e:
-        logger.error(f"Error handling analysis callback: {str(e)}")
-        await query.message.reply_text("Виникла помилка при генерації аналізу.")
-
-async def show_stats(query, context):
-    """Показує статистику користувача"""
-    try:
-        from datetime import datetime
-        
-        # Отримуємо ID користувача Telegram
-        telegram_id = query.from_user.id
-        
-        # Імпортуємо необхідні функції
-        from database.db_operations import get_or_create_user, get_monthly_stats
-        
-        # Отримуємо або створюємо користувача в БД
-        user = get_or_create_user(
-            telegram_id=telegram_id, 
-            username=query.from_user.username,
-            first_name=query.from_user.first_name,
-            last_name=query.from_user.last_name
-        )
-        
-        # Отримуємо статистику
-        stats = get_monthly_stats(user.id)
-        
-        # Форматуємо текст статистики
-        expenses = stats['expenses']
-        income = stats['income']
-        balance = stats['balance']
-        
-        # Отримуємо поточний місяць українською
-        current_month = datetime.now().strftime("%B")
-        months_uk = {
-            "January": "січень", "February": "лютий", "March": "березень",
-            "April": "квітень", "May": "травень", "June": "червень",
-            "July": "липень", "August": "серпень", "September": "вересень",
-            "October": "жовтень", "November": "листопад", "December": "грудень"
-        }
-        month_uk = months_uk.get(current_month, current_month)
-        
-        # Створюємо візуальне представлення балансу (графічна шкала)
-        if income > 0:
-            expense_percent = min(expenses / income * 100, 100)
-            balance_scale = ""
-            filled_blocks = int(expense_percent / 10)
-            empty_blocks = 10 - filled_blocks
-            
-            if expense_percent < 70:
-                balance_scale = "🟢" * filled_blocks + "⚪" * empty_blocks
-            elif 70 <= expense_percent < 90:
-                balance_scale = "🟠" * filled_blocks + "⚪" * empty_blocks
-            else:
-                balance_scale = "🔴" * filled_blocks + "⚪" * empty_blocks
-            
-            efficiency = f"Витрачено {expense_percent:.1f}% від доходу"
-        else:
-            balance_scale = "⚪⚪⚪⚪⚪⚪⚪⚪⚪⚪"
-            efficiency = "Додайте дохід для аналізу ефективності"
-        
-        # Форматуємо заголовок та загальну статистику
-        stats_text = (
-            f"📊 *ФІНАНСОВИЙ ОГЛЯД: {month_uk.upper()}*\n\n"
-            f"💰 *Доходи:* `{income:.2f} грн`\n"
-            f"💸 *Витрати:* `{expenses:.2f} грн`\n"
-            f"💼 *Баланс:* `{balance:.2f} грн`\n\n"
-            f"{balance_scale}\n"
-            f"_{efficiency}_\n\n"
-        )
-        
-        # Додаємо топ категорій витрат з візуалізацією
-        if stats['top_categories']:
-            stats_text += "*ТОП КАТЕГОРІЙ ВИТРАТ:*\n"
-            for i, category in enumerate(stats['top_categories'], 1):
-                name, icon, amount = category
-                percentage = (amount / expenses) * 100 if expenses > 0 else 0
-                
-                # Додаємо візуальну шкалу для категорії
-                category_bar = ""
-                bar_length = int(percentage / 10) if percentage > 0 else 0
-                if bar_length > 0:
-                    category_bar = "▓" * min(bar_length, 10)
-                
-                stats_text += f"`{i}` {icon} *{name}*\n"
-                stats_text += f"   `{amount:.2f} грн ({percentage:.1f}%)` {category_bar}\n"
-        else:
-            stats_text += "*ТОП КАТЕГОРІЙ ВИТРАТ:*\n"
-            stats_text += "_Дані відсутні - додайте свою першу транзакцію!_\n\n"
-        
-        # Додаємо інформацію про бюджет
-        # Це можна замінити на реальні дані, якщо є функція отримання бюджету
-        budget_spent_percent = min((expenses / 10000) * 100, 100)  # Умовний бюджет 10000 грн
-        stats_text += f"\n*БЮДЖЕТ МІСЯЦЯ:*\n"
-        stats_text += f"Використано: `{budget_spent_percent:.1f}%` від плану\n"
-        
-        # Додаємо розширені кнопки для навігації
-        keyboard = [
-            [
-                InlineKeyboardButton("📅 День", callback_data="stats_daily"),
-                InlineKeyboardButton("📆 Тиждень", callback_data="stats_weekly"),
-                InlineKeyboardButton("📆 Місяць", callback_data="stats_monthly")
-            ],
-            [
-                InlineKeyboardButton("📊 Графіки та діаграми", callback_data="stats_charts")
-            ],
-            [
-                InlineKeyboardButton("💹 Динаміка доходів", callback_data="income_analysis"),
-                InlineKeyboardButton("💸 Аналіз витрат", callback_data="expense_analysis")
-            ],
-            [
-                InlineKeyboardButton("📥 Експорт даних", callback_data="export_transactions"),
-                InlineKeyboardButton("« Назад", callback_data="back_to_main")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text=stats_text,
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
-        )
-    except Exception as e:
-        error_message = f"❌ Помилка при отриманні статистики: {str(e)}"
-        await query.edit_message_text(
-            text=error_message,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Назад", callback_data="back_to_main")]])
-        )
-        keyboard = [[InlineKeyboardButton("« Назад", callback_data="back_to_main")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text=error_message,
-            reply_markup=reply_markup
-        )
-
-# ==================== TRANSACTION PROCESSING FUNCTIONS ====================
-
-async def save_transaction_to_db(query, context):
-    """Зберігає транзакцію в базу даних"""
-    try:
-        if 'transaction_data' not in context.user_data:
-            await query.edit_message_text("Помилка: дані транзакції втрачено.")
             return
-        
-        transaction_data = context.user_data['transaction_data']
-        user = get_user(query.from_user.id)
-        
-        if not user:
-            await query.edit_message_text("Користувач не знайдений.")
-            return
-        
-        # Імпортуємо необхідні моделі
-        from database.db_operations import add_transaction
-        from database.models import TransactionType
-        
-        # Визначаємо тип транзакції
-        transaction_type = TransactionType.EXPENSE if transaction_data['type'] == 'expense' else TransactionType.INCOME
-        
-        # Створюємо транзакцію
-        new_transaction = add_transaction(
+
+        # Додаємо транзакцію до бази даних
+        add_transaction(
             user_id=user.id,
-            amount=transaction_data['amount'],
-            description=transaction_data.get('description', ''),
-            category_id=transaction_data['category_id'],
-            transaction_type=transaction_type,
-            source='manual'
+            amount=pending_receipt['amount'],
+            description=pending_receipt['description'],
+            category_id=pending_receipt['category_id'],
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=pending_receipt['transaction_date'],
+            source='receipt',
+            receipt_image=pending_receipt['file_path']
         )
-        
-        # Отримуємо символ валюти користувача
-        currency_symbol = user.currency or "₴"
-        
-        # Формуємо повідомлення про успіх
-        type_emoji = "💸" if transaction_data['type'] == 'expense' else "💰"
-        type_text = "витрату" if transaction_data['type'] == 'expense' else "дохід"
-        sign = "-" if transaction_data['type'] == 'expense' else "+"
-        
-        success_text = (
-            f"✅ *{type_text.capitalize()} успішно додано!*\n\n"
-            f"📂 **Категорія:** {transaction_data['category_icon']} {transaction_data['category_name']}\n"
-            f"💰 **Сума:** {sign}{transaction_data['amount']:,.2f} {currency_symbol}\n"
-        )
-        
-        if transaction_data.get('description'):
-            success_text += f"📝 **Опис:** {transaction_data['description']}\n"
-        
-        success_text += f"📅 **Дата:** {new_transaction.transaction_date.strftime('%d.%m.%Y %H:%M')}"
-        
-        keyboard = [
-            [
-                InlineKeyboardButton(f"➕ Додати ще {type_text}", 
-                                   callback_data=f"manual_{'expense' if transaction_data['type'] == 'expense' else 'income'}"),
-                InlineKeyboardButton("📊 Статистика", callback_data="stats")
-            ],
-            [
-                InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
+        # Очищуємо збережені дані
+        context.user_data.pop('pending_receipt', None)
+
+        # Показуємо підтвердження
         await query.edit_message_text(
-            success_text,
-            reply_markup=reply_markup,
+            f"✅ **Транзакцію успішно додано!**\n\n"
+            f"🏪 Магазин: {pending_receipt['store_name']}\n"
+            f"💰 Сума: {pending_receipt['amount']:.2f} грн\n"
+            f"📅 Дата: {pending_receipt['transaction_date'].strftime('%d.%m.%Y')}\n"
+            f"📂 Категорія: {pending_receipt['category']}\n\n"
+            f"Транзакцію додано до ваших витрат.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("📊 Переглянути транзакції", callback_data="view_all_transactions")],
+                [InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")]
+            ]),
             parse_mode="Markdown"
         )
-        
-        # Очищаємо дані транзакції
-        if 'transaction_data' in context.user_data:
-            del context.user_data['transaction_data']
-            
+
     except Exception as e:
-        logger.error(f"Error saving transaction: {str(e)}")
+        logger.error(f"Error in handle_confirm_receipt_add: {e}")
         await query.edit_message_text(
-            f"❌ Помилка при збереженні транзакції: {str(e)}\n\n"
-            f"Спробуйте ще раз або зверніться до підтримки.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]])
+            "❌ Виникла помилка під час додавання транзакції. Спробуйте ще раз.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")
+            ]])
         )
-
-async def show_add_expense_category_form(query, context):
-    """Показує форму для створення нової категорії витрат"""
-    text = (
-        "➕ *Створення нової категорії витрат*\n\n"
-        "📝 **Введіть назву категорії:**\n"
-        "Наприклад: `Спортзал`, `Підписки`, `Домашні тварини`\n\n"
-        "💡 *Підказка:* Назва повинна бути короткою та зрозумілою"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("❌ Скасувати", callback_data="manual_expense")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    # Зберігаємо стан створення категорії
-    context.user_data['category_creation'] = {
-        'type': 'expense',
-        'step': 'name'
-    }
-    
-    await query.edit_message_text(
-        text=text,
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
-    )
-
-async def show_add_income_category_form(query, context):
-    """Показує форму для створення нової категорії доходів"""
-    text = (
-        "➕ *Створення нової категорії доходів*\n\n"
-        "📝 **Введіть назву категорії:**\n"
-        "Наприклад: `Підробіток`, `Cashback`, `Дивіденди`\n\n"
-        "💡 *Підказка:* Назва повинна бути короткою та зрозумілою"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("❌ Скасувати", callback_data="manual_income")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    # Зберігаємо стан створення категорії
-    context.user_data['category_creation'] = {
-        'type': 'income',
-        'step': 'name'
-    }
-    
-    await query.edit_message_text(
-        text=text,
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
-    )
-
-# ==================== TRANSACTION INPUT HANDLERS ====================
-
-async def handle_transaction_amount_input(update, context):
-    """Обробляє введення суми для транзакції"""
-    try:
-        if 'transaction_data' not in context.user_data:
-            await update.message.reply_text("Помилка: дані транзакції втрачено.")
-            return
-        
-        transaction_data = context.user_data['transaction_data']
-        amount_text = update.message.text.strip()
-        
-        # Парсимо суму
-        try:
-            # Видаляємо всі символи крім цифр, крапок і ком
-            amount_text = re.sub(r'[^\d.,]', '', amount_text)
-            # Замінюємо кому на крапку
-            amount_text = amount_text.replace(',', '.')
-            
-            amount = float(amount_text)
-            if amount <= 0:
-                await update.message.reply_text(
-                    "❌ Сума повинна бути більше нуля. Спробуйте ще раз:"
-                )
-                return
-            
-            if amount > 1000000:
-                await update.message.reply_text(
-                    "❌ Сума занадто велика. Максимальна сума: 1,000,000. Спробуйте ще раз:"
-                )
-                return
-        
-        except ValueError:
-            await update.message.reply_text(
-                "❌ Невірний формат суми. Введіть число (наприклад: 250 або 250.50):"
-            )
-            return
-        
-        # Зберігаємо суму
-        transaction_data['amount'] = amount
-        transaction_data['step'] = 'description'
-        
-        # Пропонуємо ввести опис або пропустити
-        type_text = "витрати" if transaction_data['type'] == 'expense' else "доходу"
-        text = (
-            f"💰 **Сума {type_text}:** {amount:,.2f} ₴\n\n"
-            f"📝 **Введіть опис транзакції** (необов'язково):\n"
-            f"Наприклад: `Покупка продуктів у АТБ`\n\n"
-            f"Або натисніть кнопку нижче, щоб пропустити опис."
-        )
-        
-        keyboard = [
-            [InlineKeyboardButton("⏭️ Пропустити опис", callback_data="skip_description")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(
-            text=text,
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
-        )
-        
-    except Exception as e:
-        logger.error(f"Error handling transaction amount input: {str(e)}")
-        await update.message.reply_text("Виникла помилка. Спробуйте ще раз.")
-
-async def handle_transaction_description_input(update, context):
-    """Обробляє введення опису для транзакції"""
-    try:
-        if 'transaction_data' not in context.user_data:
-            await update.message.reply_text("Помилка: дані транзакції втрачено.")
-            return
-        
-        transaction_data = context.user_data['transaction_data']
-        description = update.message.text.strip()
-        
-        if len(description) > 255:
-            await update.message.reply_text(
-                "❌ Опис занадто довгий. Максимум 255 символів. Спробуйте ще раз:"
-            )
-            return
-        
-        # Зберігаємо опис
-        transaction_data['description'] = description
-        
-        # Зберігаємо транзакцію в базу даних
-        await save_transaction_from_message(update, context)
-        
-    except Exception as e:
-        logger.error(f"Error handling transaction description input: {str(e)}")
-        await update.message.reply_text("Виникла помилка. Спробуйте ще раз.")
-
-async def save_transaction_from_message(update, context):
-    """Зберігає транзакцію в базу даних після введення через повідомлення"""
-    try:
-        if 'transaction_data' not in context.user_data:
-            await update.message.reply_text("Помилка: дані транзакції втрачено.")
-            return
-        
-        transaction_data = context.user_data['transaction_data']
-        user = get_user(update.effective_user.id)
-        
-        if not user:
-            await update.message.reply_text("Користувач не знайдений.")
-            return
-        
-        # Імпортуємо необхідні моделі
-        from database.db_operations import add_transaction
-        from database.models import TransactionType
-        
-        # Визначаємо тип транзакції
-        transaction_type = TransactionType.EXPENSE if transaction_data['type'] == 'expense' else TransactionType.INCOME
-        
-        # Створюємо транзакцію
-        new_transaction = add_transaction(
-            user_id=user.id,
-            amount=transaction_data['amount'],
-            description=transaction_data.get('description', ''),
-            category_id=transaction_data['category_id'],
-            transaction_type=transaction_type,
-            source='manual'
-        )
-        
-        # Отримуємо символ валюти користувача
-        currency_symbol = user.currency or "₴"
-        
-        # Формуємо повідомлення про успіх
-        type_emoji = "💸" if transaction_data['type'] == 'expense' else "💰"
-        type_text = "витрату" if transaction_data['type'] == 'expense' else "дохід"
-        sign = "-" if transaction_data['type'] == 'expense' else "+"
-        
-        success_text = (
-            f"✅ *{type_text.capitalize()} успішно додано!*\n\n"
-            f"📂 **Категорія:** {transaction_data['category_icon']} {transaction_data['category_name']}\n"
-            f"💰 **Сума:** {sign}{transaction_data['amount']:,.2f} {currency_symbol}\n"
-        )
-        
-        if transaction_data.get('description'):
-            success_text += f"📝 **Опис:** {transaction_data['description']}\n"
-        
-        success_text += f"📅 **Дата:** {new_transaction.transaction_date.strftime('%d.%m.%Y %H:%M')}"
-        
-        keyboard = [
-            [
-                InlineKeyboardButton(f"➕ Додати ще {type_text}", 
-                                   callback_data=f"manual_{'expense' if transaction_data['type'] == 'expense' else 'income'}"),
-                InlineKeyboardButton("📊 Статистика", callback_data="stats")
-            ],
-            [
-                InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(
-            success_text,
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
-        )
-        
-        # Очищаємо дані транзакції
-        if 'transaction_data' in context.user_data:
-            del context.user_data['transaction_data']
-            
-    except Exception as e:
-        logger.error(f"Error saving transaction from message: {str(e)}")
-        await update.message.reply_text(
-            f"❌ Помилка при збереженні транзакції: {str(e)}\n\n"
-            f"Спробуйте ще раз або зверніться до підтримки."
-        )
-
-async def back_to_main(query, context):
-    """Повертає до головного меню"""
-    from handlers.main_menu import show_main_menu
-    await show_main_menu(query, context, is_query=True)
-
-# ==================== CATEGORY SELECTION HANDLERS ====================
-
-async def handle_expense_category_selection(query, context, category_id):
-    """Обробляє вибір категорії для витрати"""
-    try:
-        # Отримуємо інформацію про категорію
-        from database.db_operations import get_category_by_id
-        category = get_category_by_id(category_id)
-        
-        if not category:
-            await query.edit_message_text("❌ Категорію не знайдено.")
-            return
-        
-        # Зберігаємо дані транзакції
-        context.user_data['transaction_data'] = {
-            'type': 'expense',
-            'category_id': category.id,
-            'category_name': category.name,
-            'category_icon': category.icon or '💸',
-            'step': 'amount'
-        }
-        
-        # Просимо ввести суму
-        user = get_user(query.from_user.id)
-        currency_symbol = user.currency or "₴"
-        
-        text = (
-            f"💸 **Додавання витрати**\n\n"
-            f"📂 **Категорія:** {category.icon or '💸'} {category.name}\n\n"
-            f"💰 **Введіть суму витрати** (в {currency_symbol}):\n"
-            f"Наприклад: `250` або `250.50`\n\n"
-            f"💡 **Підказка:** Введіть лише число, символ валюти додається автоматично"
-        )
-        
-        keyboard = [
-            [InlineKeyboardButton("❌ Скасувати", callback_data="manual_expense")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text=text,
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
-        )
-        
-    except Exception as e:
-        logger.error(f"Error in handle_expense_category_selection: {str(e)}")
-        await query.edit_message_text("Виникла помилка. Спробуйте ще раз.")
-
-async def handle_income_category_selection(query, context, category_id):
-    """Обробляє вибір категорії для доходу"""
-    try:
-        # Отримуємо інформацію про категорію
-        from database.db_operations import get_category_by_id
-        category = get_category_by_id(category_id)
-        
-        if not category:
-            await query.edit_message_text("❌ Категорію не знайдено.")
-            return
-        
-        # Зберігаємо дані транзакції
-        context.user_data['transaction_data'] = {
-            'type': 'income',
-            'category_id': category.id,
-            'category_name': category.name,
-            'category_icon': category.icon or '💰',
-            'step': 'amount'
-        }
-        
-        # Просимо ввести суму
-        user = get_user(query.from_user.id)
-        currency_symbol = user.currency or "₴"
-        
-        text = (
-            f"💰 **Додавання доходу**\n\n"
-            f"📂 **Категорія:** {category.icon or '💰'} {category.name}\n\n"
-            f"💰 **Введіть суму доходу** (в {currency_symbol}):\n"
-            f"Наприклад: `5000` або `5000.50`\n\n"
-            f"💡 **Підказка:** Введіть лише число, символ валюти додається автоматично"
-        )
-        
-        keyboard = [
-            [InlineKeyboardButton("❌ Скасувати", callback_data="manual_income")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text=text,
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
-        )
-        
-    except Exception as e:
-        logger.error(f"Error in handle_income_category_selection: {str(e)}")
-        await query.edit_message_text("Виникла помилка. Спробуйте ще раз.")
-
-async def handle_skip_description(query, context):
-    """Обробляє пропуск введення опису"""
-    try:
-        if 'transaction_data' not in context.user_data:
-            await query.edit_message_text("Помилка: дані транзакції втрачено.")
-            return
-        
-        transaction_data = context.user_data['transaction_data']
-        transaction_data['description'] = ''  # Порожній опис
-        
-        # Зберігаємо транзакцію в базу даних
-        await save_transaction_to_db(query, context)
-        
-    except Exception as e:
-        logger.error(f"Error in handle_skip_description: {str(e)}")
-        await query.edit_message_text("Виникла помилка. Спробуйте ще раз.")
-
-async def handle_date_selection(query, context):
-    """Обробляє вибір дати для транзакції"""
-    try:
-        date_option = query.data.split("_")[-1]
-        
-        if 'transaction_data' not in context.user_data:
-            await query.edit_message_text("Помилка: дані транзакції втрачено.")
-            return
-        
-        transaction_data = context.user_data['transaction_data']
-        
-        from datetime import datetime, timedelta
-        
-        if date_option == "today":
-            selected_date = datetime.now()
-        elif date_option == "yesterday":
-            selected_date = datetime.now() - timedelta(days=1)
-        elif date_option == "custom":
-            # Тут можна додати логіку для вибору користувацької дати
-            selected_date = datetime.now()
-        else:
-            selected_date = datetime.now()
-        
-        transaction_data['transaction_date'] = selected_date
-        
-        # Зберігаємо транзакцію
-        await save_transaction_to_db(query, context)
-        
-    except Exception as e:
-        logger.error(f"Error in handle_date_selection: {str(e)}")
-        await query.edit_message_text("Виникла помилка. Спробуйте ще раз.")
-
-# ==================== ENHANCED CALLBACK HANDLERS ====================
-
-async def handle_enhanced_add_transaction(query, context):
-    """Розширений обробник для додавання транзакцій з покращеним UX"""
-    callback_data = query.data
-    
-    try:
-        # Обробка вибору категорій витрат
-        if callback_data.startswith("expense_cat_"):
-            category_id = int(callback_data.split("_")[-1])
-            await handle_expense_category_selection(query, context, category_id)
-        
-        # Обробка вибору категорій доходів
-        elif callback_data.startswith("income_cat_"):
-            category_id = int(callback_data.split("_")[-1])
-            await handle_income_category_selection(query, context, category_id)
-        
-        # Обробка пропуску опису
-        elif callback_data == "skip_description":
-            await handle_skip_description(query, context)
-        
-        # Обробка вибору дати
-        elif callback_data.startswith("date_"):
-            await handle_date_selection(query, context)
-        
-        # Обробка повторного додавання транзакції того ж типу
-        elif callback_data.startswith("manual_"):
-            transaction_type = callback_data.split("_")[1]
-            if transaction_type == "expense":
-                await show_enhanced_expense_form(query, context)
-            elif transaction_type == "income":
-                await show_enhanced_income_form(query, context)
-            else:
-                await show_manual_transaction_type(query, context)
-        
-        else:
-            logger.warning(f"Unhandled callback_data: {callback_data}")
-    
-    except Exception as e:
-        logger.error(f"Error in handle_enhanced_add_transaction: {str(e)}")
-        await query.edit_message_text("Виникла помилка. Спробуйте ще раз.")
-
-# ==================== VALIDATION AND UTILITY FUNCTIONS ====================
-
-def validate_amount(amount_text):
-    """Валідує введену суму"""
-    try:
-        # Видаляємо всі символи крім цифр, крапок і ком
-        amount_text = re.sub(r'[^\d.,]', '', amount_text)
-        # Замінюємо кому на крапку
-        amount_text = amount_text.replace(',', '.')
-        
-        amount = float(amount_text)
-        
-        if amount <= 0:
-            return None, "❌ Сума повинна бути більше нуля"
-        
-        if amount > 1000000:
-            return None, "❌ Сума занадто велика (максимум: 1,000,000)"
-        
-        return amount, None
-    
-    except ValueError:
-        return None, "❌ Невірний формат суми. Введіть число (наприклад: 250 або 250.50)"
-
-async def show_quick_amount_buttons(query, context, transaction_type):
-    """Показує швидкі кнопки для вибору суми"""
-    try:
-        user = get_user(query.from_user.id)
-        if not user:
-            return
-        
-        currency_symbol = user.currency or "₴"
-        
-        # Різні суми для витрат та доходів
-        if transaction_type == 'expense':
-            amounts = [50, 100, 250, 500, 1000, 2000]
-            type_name = "витрати"
-            emoji = "💸"
-        else:
-            amounts = [1000, 2500, 5000, 10000, 15000, 20000]
-            type_name = "доходу"
-            emoji = "💰"
-        
-        keyboard = []
-        
-        # Додаємо кнопки швидкого вибору суми
-        for i in range(0, len(amounts), 3):
-            row = []
-            for j in range(i, min(i + 3, len(amounts))):
-                amount = amounts[j]
-                row.append(InlineKeyboardButton(
-                    f"{amount} {currency_symbol}", 
-                    callback_data=f"quick_amount_{transaction_type}_{amount}"
-                ))
-            keyboard.append(row)
-        
-        # Додаємо кнопки управління
-        keyboard.append([
-            InlineKeyboardButton("✏️ Ввести вручну", callback_data=f"manual_amount_{transaction_type}"),
-            InlineKeyboardButton("❌ Скасувати", callback_data=f"manual_{transaction_type}")
-        ])
-        
-        text = (
-            f"{emoji} **Швидкий вибір суми {type_name}**\n\n"
-            f"Оберіть одну з популярних сум або введіть власну:\n\n"
-            f"💡 **Підказка:** Натисніть на суму або оберіть 'Ввести вручну'"
-        )
-        
-        await query.edit_message_text(
-            text=text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
-        
-    except Exception as e:
-        logger.error(f"Error in show_quick_amount_buttons: {str(e)}")
-
-async def handle_quick_amount_selection(query, context):
-    """Обробляє швидкий вибір суми"""
-    try:
-        # Розбираємо callback_data: quick_amount_expense_250
-        parts = query.data.split("_")
-        transaction_type = parts[2]
-        amount = float(parts[3])
-        
-        if 'transaction_data' not in context.user_data:
-            await query.edit_message_text("Помилка: дані транзакції втрачено.")
-            return
-        
-        transaction_data = context.user_data['transaction_data']
-        transaction_data['amount'] = amount
-        transaction_data['step'] = 'description'
-        
-        # Пропонуємо ввести опис або пропустити
-        user = get_user(query.from_user.id)
-        currency_symbol = user.currency or "₴"
-        type_text = "витрати" if transaction_type == 'expense' else "доходу"
-        
-        text = (
-            f"💰 **Сума {type_text}:** {amount:,.2f} {currency_symbol}\n\n"
-            f"📝 **Введіть опис транзакції** (необов'язково):\n"
-            f"Наприклад: `Покупка продуктів у АТБ`\n\n"
-            f"Або натисніть кнопку нижче, щоб пропустити опис."
-        )
-        
-        keyboard = [
-            [InlineKeyboardButton("⏭️ Пропустити опис", callback_data="skip_description")],
-            [InlineKeyboardButton("❌ Скасувати", callback_data=f"manual_{transaction_type}")]
-        ]
-        
-        await query.edit_message_text(
-            text=text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
-        
-    except Exception as e:
-        logger.error(f"Error in handle_quick_amount_selection: {str(e)}")
-        await query.edit_message_text("Виникла помилка. Спробуйте ще раз.")
-
-# ==================== IMPORT FROM TRANSACTION_HANDLER ====================
-
-from handlers.transaction_handler import (
-    show_add_transaction_menu as show_transaction_menu_enhanced,
-    show_manual_transaction_type as show_manual_type_enhanced,
-    show_enhanced_expense_form, show_enhanced_income_form,
-    show_upload_statement_form, show_upload_pdf_guide,
-    show_upload_excel_guide, show_upload_csv_guide,
-    show_receipt_photo_soon, notify_receipt_ready
-)

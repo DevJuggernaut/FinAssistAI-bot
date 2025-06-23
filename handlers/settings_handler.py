@@ -26,7 +26,7 @@ async def show_settings_menu(query, context):
     try:
         keyboard = [
             [
-                InlineKeyboardButton("🏷️ Управління категоріями", callback_data="settings_categories"),
+                InlineKeyboardButton("🏷️ Категорії", callback_data="settings_categories"),
                 InlineKeyboardButton("💱 Основна валюта", callback_data="settings_currency")
             ],
             [
@@ -41,7 +41,7 @@ async def show_settings_menu(query, context):
         text = (
             "⚙️ **Налаштування FinAssist**\n\n"
             "Керуйте своїм профілем та даними:\n\n"
-            "🏷️ *Управління категоріями* — додавання, видалення категорій\n"
+            "🏷️ *Категорії* — управління вашими категоріями транзакцій\n"
             "💱 *Основна валюта* — вибір валюти для відображення\n"
             "📤 *Експорт даних* — завантаження ваших транзакцій\n"
             "🗑️ *Очистити дані* — видалення всіх транзакцій\n\n"
@@ -75,7 +75,7 @@ async def show_categories_management(query, context):
         expense_categories = get_user_categories(user.id, TransactionType.EXPENSE)
         income_categories = get_user_categories(user.id, TransactionType.INCOME)
         
-        text = "🏷️ **Управління категоріями**\n\n"
+        text = "🏷️ **Категорії**\n\n"
         
         # Показуємо категорії витрат
         if expense_categories:

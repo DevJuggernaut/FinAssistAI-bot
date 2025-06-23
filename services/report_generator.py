@@ -21,8 +21,9 @@ logger = logging.getLogger(__name__)
 reports_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'reports')
 os.makedirs(reports_dir, exist_ok=True)
 
-# Налаштування matplotlib для підтримки української мови
-matplotlib.rcParams['font.family'] = 'DejaVu Sans'
+# Налаштування matplotlib для підтримки української мови та емодзі
+matplotlib.rcParams['font.family'] = ['DejaVu Sans', 'Arial Unicode MS', 'Segoe UI Emoji']
+matplotlib.rcParams['font.size'] = 10
 # Налаштування стилю seaborn для красивіших графіків
 sns.set_style("whitegrid")
 
@@ -79,8 +80,8 @@ class FinancialReport:
             if not expenses_by_category:
                 return None, "Немає даних про витрати за вказаний період"
             
-            # Підготовка даних для діаграми
-            labels = [f"{cat[0]} {cat[1]}" for cat in expenses_by_category]
+            # Підготовка даних для діаграми без емодзі
+            labels = [cat[0] for cat in expenses_by_category]  # Тільки назви категорій
             values = [cat[2] for cat in expenses_by_category]
             
             # Якщо більше 7 категорій, об'єднуємо найменші в "Інше"
@@ -88,31 +89,38 @@ class FinancialReport:
                 top_labels = labels[:6]
                 top_values = values[:6]
                 other_value = sum(values[6:])
-                top_labels.append("Інше 📌")
+                top_labels.append("Інше")
                 top_values.append(other_value)
                 labels = top_labels
                 values = top_values
             
-            # Створюємо діаграму з гарним стилем
-            plt.figure(figsize=(10, 7))
-            colors = sns.color_palette("tab10", len(labels))
-            explode = [0.05] * len(labels)  # Трохи "вибухаємо" всі сектори для кращого вигляду
+            # Створюємо чітку діаграму з більшими розмірами
+            plt.figure(figsize=(12, 8), dpi=150)
+            # Сучасна кольорова палітра
+            colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#FF9FF3', '#54A0FF', '#5F27CD']
+            colors = colors[:len(labels)]
             
-            plt.pie(values, labels=None, autopct='%1.1f%%', startangle=90, 
-                    colors=colors, explode=explode, shadow=True)
-            plt.axis('equal')  # Забезпечує, що кругова діаграма буде намальована як коло
+            # Функція для відображення відсотків тільки у великих секторах
+            def autopct_format(pct):
+                return f'{pct:.1f}%' if pct > 4 else ''
             
-            # Додаємо заголовок
+            plt.pie(values, labels=None, autopct=autopct_format, startangle=90, 
+                    colors=colors, wedgeprops={'edgecolor': 'white', 'linewidth': 3},
+                    textprops={'fontsize': 16, 'fontweight': 'bold'}, pctdistance=0.85)
+            plt.axis('equal')
+            
+            # Лаконічний заголовок з більшим шрифтом
             month_names = {
                 1: "січень", 2: "лютий", 3: "березень", 4: "квітень",
                 5: "травень", 6: "червень", 7: "липень", 8: "серпень",
                 9: "вересень", 10: "жовтень", 11: "листопад", 12: "грудень"
             }
             month_name = month_names.get(month, str(month))
-            plt.title(f"Розподіл витрат за категоріями: {month_name} {year}", fontsize=16)
+            plt.title(f"Розподіл витрат за категоріями: {month_name} {year}", fontsize=32, fontweight='bold', pad=30)
             
-            # Додаємо легенду за межами діаграми
-            plt.legend(labels, loc="center left", bbox_to_anchor=(1, 0.5))
+            # Легенда справа з сумами (без емодзі) з більшим шрифтом
+            legend_labels = [f"{label}: {value:.0f}₴" for label, value in zip(labels, values)]
+            plt.legend(legend_labels, loc="center left", bbox_to_anchor=(1.05, 0.5), fontsize=18)
             
             # Тісний вигляд
             plt.tight_layout()
@@ -132,6 +140,97 @@ class FinancialReport:
                 
         except Exception as e:
             logger.error(f"Помилка при створенні кругової діаграми: {e}")
+            return None, str(e)
+    
+    def generate_income_pie_chart(self, year=None, month=None, save_path=None):
+        """Генерація кругової діаграми доходів за категоріями"""
+        try:
+            if year is None or month is None:
+                now = datetime.now()
+                year = now.year
+                month = now.month
+            
+            # Визначаємо початок і кінець місяця
+            start_date = datetime(year, month, 1)
+            last_day = calendar.monthrange(year, month)[1]
+            end_date = datetime(year, month, last_day, 23, 59, 59)
+            
+            # Отримуємо дані про доходи за категоріями
+            income_by_category = self.session.query(
+                Category.name, 
+                Category.icon,
+                func.sum(Transaction.amount).label('total')
+            ).join(Transaction, Transaction.category_id == Category.id
+            ).filter(
+                Transaction.user_id == self.user_id,
+                Transaction.type == TransactionType.INCOME,
+                Transaction.transaction_date.between(start_date, end_date)
+            ).group_by(Category.name, Category.icon
+            ).order_by(func.sum(Transaction.amount).desc()).all()
+            
+            if not income_by_category:
+                return None, "Немає даних про доходи за вказаний період"
+            
+            # Підготовка даних для діаграми без емодзі
+            labels = [cat[0] for cat in income_by_category]  # Тільки назви категорій
+            values = [cat[2] for cat in income_by_category]
+            
+            # Якщо більше 7 категорій, об'єднуємо найменші в "Інше"
+            if len(labels) > 7:
+                top_labels = labels[:6]
+                top_values = values[:6]
+                other_value = sum(values[6:])
+                top_labels.append("Інше")
+                top_values.append(other_value)
+                labels = top_labels
+                values = top_values
+            
+            # Створюємо чітку діаграму для доходів з більшими розмірами
+            plt.figure(figsize=(12, 8), dpi=150)
+            # Сучасна зелена палітра для доходів
+            colors = ['#2ECC71', '#27AE60', '#16A085', '#1ABC9C', '#58D68D', '#52C41A', '#73D13D', '#95DE64']
+            colors = colors[:len(labels)]
+            
+            # Функція для відображення відсотків тільки у великих секторах
+            def autopct_format(pct):
+                return f'{pct:.1f}%' if pct > 5 else ''
+            
+            plt.pie(values, labels=None, autopct=autopct_format, startangle=90, 
+                    colors=colors, wedgeprops={'edgecolor': 'white', 'linewidth': 3},
+                    textprops={'fontsize': 18, 'fontweight': 'bold'}, pctdistance=0.85)
+            plt.axis('equal')
+            
+            # Лаконічний заголовок з більшим шрифтом
+            month_names = {
+                1: "січень", 2: "лютий", 3: "березень", 4: "квітень",
+                5: "травень", 6: "червень", 7: "липень", 8: "серпень",
+                9: "вересень", 10: "жовтень", 11: "листопад", 12: "грудень"
+            }
+            month_name = month_names.get(month, str(month))
+            plt.title(f"Розподіл доходів за категоріями: {month_name} {year}", fontsize=20, fontweight='bold', pad=30)
+            
+            # Легенда справа з сумами (без емодзі) з більшим шрифтом
+            legend_labels = [f"{label}: {value:.0f}₴" for label, value in zip(labels, values)]
+            plt.legend(legend_labels, loc="center left", bbox_to_anchor=(1.05, 0.5), fontsize=16)
+            
+            # Тісний вигляд
+            plt.tight_layout()
+            
+            # Зберігаємо або повертаємо діаграму
+            if save_path:
+                plt.savefig(save_path, dpi=100, bbox_inches='tight')
+                plt.close()
+                return save_path, None
+            else:
+                # Зберігаємо в буфер
+                buffer = io.BytesIO()
+                plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+                buffer.seek(0)
+                plt.close()
+                return buffer, None
+                
+        except Exception as e:
+            logger.error(f"Помилка при створенні кругової діаграми доходів: {e}")
             return None, str(e)
     
     def generate_income_expense_bar_chart(self, months=6, save_path=None):
@@ -565,6 +664,9 @@ class FinancialReport:
             pie_chart_path = os.path.join(report_dir, 'expense_categories.png')
             pie_chart, pie_error = self.generate_expense_pie_chart(year, month, pie_chart_path)
             
+            income_pie_chart_path = os.path.join(report_dir, 'income_categories.png')
+            income_pie_chart, income_pie_error = self.generate_income_pie_chart(year, month, income_pie_chart_path)
+            
             bar_chart_path = os.path.join(report_dir, 'income_expense.png')
             bar_chart, bar_error = self.generate_income_expense_bar_chart(6, bar_chart_path)
             
@@ -731,6 +833,11 @@ class FinancialReport:
                     </div>
                     
                     <div class="chart-container">
+                        <h2>Розподіл доходів за категоріями</h2>
+                        <img src="income_categories.png" alt="Розподіл доходів">
+                    </div>
+                    
+                    <div class="chart-container">
                         <h2>Порівняння доходів і витрат за півроку</h2>
                         <img src="income_expense.png" alt="Доходи і витрати">
                     </div>
@@ -793,6 +900,7 @@ class FinancialReport:
                 'report_dir': report_dir,
                 'html_path': report_html_path,
                 'pie_chart': pie_chart_path if not pie_error else None,
+                'income_pie_chart': income_pie_chart_path if not income_pie_error else None,
                 'bar_chart': bar_chart_path if not bar_error else None,
                 'trend_chart': trend_chart_path if not trend_error else None,
                 'heatmap': heatmap_path if not heatmap_error else None,

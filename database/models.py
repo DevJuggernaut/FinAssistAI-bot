@@ -15,6 +15,14 @@ class TransactionType(enum.Enum):
     INCOME = "income"
     EXPENSE = "expense"
 
+class AccountType(enum.Enum):
+    CASH = "cash"           # Готівка
+    BANK_CARD = "bank_card" # Банківська картка  
+    SAVINGS = "savings"     # Ощадний рахунок
+    INVESTMENT = "investment" # Інвестиційний рахунок
+    CREDIT = "credit"       # Кредитна картка
+    OTHER = "other"         # Інше
+
 class User(Base):
     """Модель користувача системи"""
     __tablename__ = 'users'
@@ -42,6 +50,7 @@ class User(Base):
     transactions = relationship("Transaction", back_populates="user")
     categories = relationship("Category", back_populates="user")
     budget_plans = relationship("BudgetPlan", back_populates="user")
+    accounts = relationship("Account", back_populates="user")
     
     def __repr__(self):
         return f"<User(id={self.id}, telegram_id={self.telegram_id}, username={self.username})>"
@@ -72,6 +81,7 @@ class Transaction(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'))
     category_id = Column(Integer, ForeignKey('categories.id'))
+    account_id = Column(Integer, ForeignKey('accounts.id'), nullable=True)  # Рахунок транзакції
     amount = Column(Float, nullable=False)
     description = Column(String(255), nullable=True)
     transaction_date = Column(DateTime, default=datetime.datetime.utcnow)
@@ -84,6 +94,7 @@ class Transaction(Base):
     # Зв'язки
     user = relationship("User", back_populates="transactions")
     category = relationship("Category", back_populates="transactions")
+    account = relationship("Account", back_populates="transactions")
     
     def __repr__(self):
         return f"<Transaction(id={self.id}, amount={self.amount}, type={self.type})>"
@@ -139,6 +150,30 @@ class FinancialAdvice(Base):
     
     def __repr__(self):
         return f"<FinancialAdvice(id={self.id}, user_id={self.user_id}, category={self.category})>"
+
+class Account(Base):
+    """Модель рахунку користувача"""
+    __tablename__ = 'accounts'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    name = Column(String(100), nullable=False)  # Назва рахунку (наприклад, "Основна картка")
+    account_type = Column(Enum(AccountType), nullable=False, default=AccountType.CASH)
+    icon = Column(String(50), default='💳')
+    balance = Column(Float, default=0.0)
+    currency = Column(String(10), default='UAH')
+    is_active = Column(Boolean, default=True)
+    is_main = Column(Boolean, default=False)  # Чи є це головним рахунком
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    
+    # Зв'язки
+    user = relationship("User", back_populates="accounts")
+    transactions = relationship("Transaction", back_populates="account")
+    
+    def __repr__(self):
+        return f"<Account(id={self.id}, name={self.name}, type={self.account_type}, balance={self.balance})>"
 
 # Створення всіх таблиць в базі даних
 def init_db():

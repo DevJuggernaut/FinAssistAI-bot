@@ -27,6 +27,7 @@ from handlers.setup_callbacks import (
     process_initial_balance, complete_setup,
     WAITING_CURRENCY_SELECTION, WAITING_BALANCE_INPUT, SETUP_COMPLETE
 )
+from handlers.ai_assistant_handler import handle_ai_question, WAITING_AI_QUESTION
 from database.session import init_db
 from database.cleanup import clear_all_tables, reset_database
 from services.statement_parser import StatementParser, ReceiptProcessor
@@ -93,6 +94,19 @@ def main():
         fallbacks=[CallbackQueryHandler(callback_handler.back_to_main, pattern="^back_to_main$")]
     )
     application.add_handler(setup_handler)
+    
+    # AI Assistant ConversationHandler
+    from handlers.ai_assistant_handler import start_ai_question
+    ai_assistant_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(start_ai_question, pattern="^ai_custom_question$")],
+        states={
+            WAITING_AI_QUESTION: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_ai_question)
+            ]
+        },
+        fallbacks=[CallbackQueryHandler(callback_handler.back_to_main, pattern="^back_to_main$|^ai_assistant_menu$")]
+    )
+    application.add_handler(ai_assistant_handler)
     
     # Додаємо обробник для callback "complete_setup"
     application.add_handler(CallbackQueryHandler(complete_setup, pattern="^complete_setup$"))

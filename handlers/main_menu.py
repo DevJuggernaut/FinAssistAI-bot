@@ -12,16 +12,16 @@ def create_main_menu_keyboard():
     """Створює єдину версію клавіатури головного меню"""
     keyboard = [
         [
-            InlineKeyboardButton("💳 Додати транзакцію", callback_data="add_transaction"),
-            InlineKeyboardButton("📊 Статистика", callback_data="stats")
+            InlineKeyboardButton("💰 Огляд фінансів", callback_data="my_budget"),
+            InlineKeyboardButton("➕ Додати транзакцію", callback_data="add_transaction")
         ],
         [
-            InlineKeyboardButton("💰 Мій бюджет", callback_data="my_budget"),
-            InlineKeyboardButton("📈 Аналітика", callback_data="analytics")
+            InlineKeyboardButton("📈 Аналітика", callback_data="analytics"),
+            InlineKeyboardButton("🤖 AI-помічник", callback_data="ai_assistant_menu")
         ],
         [
-            InlineKeyboardButton("⚙️ Налаштування", callback_data="settings"),
-            InlineKeyboardButton("❓ Допомога", callback_data="help")
+            InlineKeyboardButton("💳 Рахунки", callback_data="accounts_menu"),
+            InlineKeyboardButton("⚙️ Налаштування", callback_data="settings")
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -61,7 +61,7 @@ async def show_main_menu(message_or_query, context, is_query=None):
     except Exception as e:
         logger.error(f"Error in show_main_menu: {str(e)}")
         # Fallback до простого повідомлення
-        fallback_text = "🏠 Головне меню\n\nВикористовуйте команди: /add, /stats, /budget, /settings, /help"
+        fallback_text = "🏠 Головне меню\n\nВикористовуйте команди: /add, /budget, /analytics, /settings"
         
         if is_query or hasattr(message_or_query, 'edit_message_text'):
             try:
