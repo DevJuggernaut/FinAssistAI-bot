@@ -4,9 +4,10 @@
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from datetime import datetime
+from datetime import datetime
 import logging
 
-from database.db_operations import get_or_create_user, get_user_accounts, get_total_balance, get_accounts_count, create_account, get_accounts_statistics
+from database.db_operations import get_or_create_user, get_user_accounts, get_total_balance, get_accounts_count, create_account, transfer_between_accounts
 from database.models import AccountType
 
 logger = logging.getLogger(__name__)
@@ -23,11 +24,11 @@ async def show_accounts_menu(query, context):
         currency = user.currency or "UAH"
         currency_symbol = {"UAH": "₴", "USD": "$", "EUR": "€", "GBP": "£"}.get(currency, currency)
         
-        message = f"💳 *Управління рахунками*\n\n"
-        message += f"📊 *Поточний стан:*\n"
+        message = f"💳 **Управління рахунками**\n\n"
+        message += f"📊 **Поточний стан:**\n"
         message += f"🏦 Кількість рахунків: `{accounts_count}`\n"
         message += f"💰 Загальний баланс: `{total_balance:,.2f} {currency_symbol}`\n\n"
-        message += "Оберіть дію:"
+        message += "👆 *Оберіть дію для роботи з рахунками:*"
         
         keyboard = [
             [
@@ -35,11 +36,10 @@ async def show_accounts_menu(query, context):
                 InlineKeyboardButton("➕ Додати рахунок", callback_data="accounts_add")
             ],
             [
-                InlineKeyboardButton("💸 Переказ між рахунками", callback_data="accounts_transfer"),
-                InlineKeyboardButton("📊 Статистика", callback_data="accounts_stats")
+                InlineKeyboardButton("💸 Переказ між рахунками", callback_data="accounts_transfer")
             ],
             [
-                InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
             ]
         ]
         
@@ -54,7 +54,7 @@ async def show_accounts_menu(query, context):
         await query.edit_message_text(
             "❌ Помилка завантаження меню рахунків",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
             ]]),
             parse_mode="Markdown"
         )
@@ -69,20 +69,21 @@ async def show_accounts_list(query, context):
         currency_symbol = {"UAH": "₴", "USD": "$", "EUR": "€", "GBP": "£"}.get(currency, currency)
         
         if not accounts:
-            message = "💳 *Мої рахунки*\n\n"
+            message = "💳 **Мої рахунки**\n\n"
             message += "📭 У вас ще немає створених рахунків.\n\n"
-            message += "💡 *Створіть перший рахунок:*\n"
-            message += "• Основний рахунок (готівка)\n"
-            message += "• Банківська картка\n"
-            message += "• Ощадний рахунок\n"
-            message += "• Інвестиційний рахунок"
+            message += "💡 **Створіть перший рахунок для початку роботи:**\n\n"
+            message += "💵 **Готівка** — для щоденних трат\n"
+            message += "💳 **Банківська картка** — основний рахунок\n"
+            message += "💰 **Ощадний рахунок** — для накопичень\n"
+            message += "📈 **Інвестиційний** — для інвестицій\n\n"
+            message += "👆 *Почніть з будь-якого типу рахунку*"
             
             keyboard = [
-                [InlineKeyboardButton("➕ Створити перший рахунок", callback_data="accounts_add")],
-                [InlineKeyboardButton("🔙 Назад", callback_data="accounts_menu")]
+                [InlineKeyboardButton("➕ Створити рахунок", callback_data="accounts_add")],
+                [InlineKeyboardButton("◀️ Рахунки", callback_data="accounts_menu")]
             ]
         else:
-            message = f"💳 *Мої рахунки*\n\n"
+            message = f"💳 **Мої рахунки**\n\n"
             
             for account in accounts:
                 status_emoji = "✅" if account.is_active else "🔒"
@@ -98,9 +99,9 @@ async def show_accounts_list(query, context):
             keyboard = [
                 [
                     InlineKeyboardButton("➕ Додати рахунок", callback_data="accounts_add"),
-                    InlineKeyboardButton("⚙️ Налаштувати", callback_data="accounts_settings")
+                    InlineKeyboardButton("⚙️ Налаштування", callback_data="accounts_settings")
                 ],
-                [InlineKeyboardButton("🔙 Назад", callback_data="accounts_menu")]
+                [InlineKeyboardButton("◀️ Рахунки", callback_data="accounts_menu")]
             ]
         
         await query.edit_message_text(
@@ -114,22 +115,22 @@ async def show_accounts_list(query, context):
         await query.edit_message_text(
             "❌ Помилка завантаження списку рахунків",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 Назад", callback_data="accounts_menu")
+                InlineKeyboardButton("◀️ Рахунки", callback_data="accounts_menu")
             ]]),
             parse_mode="Markdown"
         )
 
 async def show_add_account_form(query, context):
     """Показує форму для додавання нового рахунку"""
-    message = f"➕ *Створення нового рахунку*\n\n"
-    message += "Оберіть тип рахунку, який хочете створити:\n\n"
-    message += "💵 *Готівка* - основний рахунок для щоденних витрат\n"
-    message += "💳 *Банківська картка* - дебетова або кредитна картка\n"
-    message += "🏦 *Банківський рахунок* - депозитний або поточний рахунок\n"
-    message += "💰 *Ощадний рахунок* - для накопичень\n"
-    message += "📈 *Інвестиційний* - для інвестицій та цінних паперів\n"
-    message += "🌐 *Криптовалюта* - криптовалютний гаманець\n"
-    message += "🎯 *Інший* - інший тип рахунку"
+    message = f"➕ **Створення рахунку**\n\n"
+    message += "Оберіть тип рахунку:\n\n"
+    message += "💵 **Готівка** — для щоденних витрат\n"
+    message += "💳 **Картка** — дебетова або кредитна\n"
+    message += "🏦 **Банк** — депозитний рахунок\n"
+    message += "💰 **Ощадний** — для накопичень\n"
+    message += "📈 **Інвестиційний** — цінні папери\n"
+    message += "🌐 **Криптовалюта** — цифровий гаманець\n\n"
+    message += "👆 *Оберіть підходящий тип*"
     
     keyboard = [
         [
@@ -148,7 +149,7 @@ async def show_add_account_form(query, context):
             InlineKeyboardButton("🎯 Інший", callback_data="accounts_add_other")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="accounts_menu")
+            InlineKeyboardButton("◀️ Рахунки", callback_data="accounts_menu")
         ]
     ]
     
@@ -164,26 +165,55 @@ async def show_account_transfer(query, context):
     accounts = get_user_accounts(user.id)
     
     if len(accounts) < 2:
-        message = "💸 *Переказ між рахунками*\n\n"
-        message += "❌ Для здійснення переказу потрібно мати принаймні 2 рахунки.\n\n"
-        message += "Створіть додатковий рахунок для можливості переказів."
+        message = "💸 **Переказ між рахунками**\n\n"
+        message += "❌ Для переказу потрібно мати принаймні 2 рахунки.\n\n"
+        message += "💡 **Створіть додатковий рахунок:**\n"
+        message += "• Банківська картка\n"
+        message += "• Ощадний рахунок\n"
+        message += "• Готівковий рахунок\n\n"
+        message += "👆 *Після створення ви зможете переказувати кошти*"
         
         keyboard = [
             [InlineKeyboardButton("➕ Створити рахунок", callback_data="accounts_add")],
-            [InlineKeyboardButton("🔙 Назад", callback_data="accounts_menu")]
+            [InlineKeyboardButton("◀️ Назад до рахунків", callback_data="accounts_menu")]
         ]
     else:
-        message = "💸 *Переказ між рахунками*\n\n"
-        message += "На даному етапі функціональність переказів знаходиться в розробці.\n\n"
-        message += "💡 *Скоро буде доступно:*\n"
-        message += "• Миттєві перекази між рахунками\n"
-        message += "• Автоматичні перекази за розкладом\n"
-        message += "• Історія всіх переказів\n"
-        message += "• Комісії та ліміти"
+        currency = user.currency or "UAH"
+        currency_symbol = {"UAH": "₴", "USD": "$", "EUR": "€", "GBP": "£"}.get(currency, currency)
         
-        keyboard = [
-            [InlineKeyboardButton("🔙 Назад", callback_data="accounts_menu")]
-        ]
+        message = "💸 **Переказ між рахунками**\n\n"
+        message += "📤 **Крок 1: Оберіть рахунок-джерело**\n\n"
+        message += "Оберіть рахунок, з якого хочете переказати кошти:\n\n"
+        
+        # Показуємо тільки рахунки з позитивним балансом
+        available_accounts = [acc for acc in accounts if acc.balance > 0]
+        
+        if not available_accounts:
+            message = "💸 **Переказ між рахунками**\n\n"
+            message += "❌ Немає рахунків з доступними коштами для переказу.\n\n"
+            message += "💡 **Для переказу потрібен рахунок з позитивним балансом:**\n"
+            message += "• Додайте доходи до існуючих рахунків\n"
+            message += "• Або створіть новий рахунок з початковим балансом\n\n"
+            
+            keyboard = [
+                [InlineKeyboardButton("➕ Додати дохід", callback_data="add_income")],
+                [InlineKeyboardButton("◀️ Назад до рахунків", callback_data="accounts_menu")]
+            ]
+        else:
+            # Показуємо доступні рахунки
+            for account in available_accounts:
+                balance_text = f"{account.balance:,.2f} {currency_symbol}"
+                message += f"{account.icon} **{account.name}**\n"
+                message += f"   � `{balance_text}`\n\n"
+            
+            # Створюємо кнопки для вибору рахунку-джерела
+            keyboard = []
+            for account in available_accounts:
+                button_text = f"{account.icon} {account.name} ({account.balance:,.0f} {currency_symbol})"
+                callback_data = f"transfer_from_{account.id}"
+                keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+            
+            keyboard.append([InlineKeyboardButton("◀️ Назад до рахунків", callback_data="accounts_menu")])
     
     await query.edit_message_text(
         message,
@@ -191,42 +221,244 @@ async def show_account_transfer(query, context):
         parse_mode="Markdown"
     )
 
-async def show_accounts_stats(query, context):
-    """Показує статистику по рахунках"""
+async def show_transfer_destination(query, context, from_account_id):
+    """Показує список рахунків для вибору призначення переказу"""
     user = get_or_create_user(query.from_user.id)
-    stats = get_accounts_statistics(user.id)
+    accounts = get_user_accounts(user.id)
+    
+    # Знаходимо рахунок-джерело
+    from_account = next((acc for acc in accounts if acc.id == from_account_id), None)
+    if not from_account:
+        await query.edit_message_text(
+            "❌ Рахунок-джерело не знайдено",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("◀️ Назад до рахунків", callback_data="accounts_menu")
+            ]]),
+            parse_mode="Markdown"
+        )
+        return
+    
+    # Показуємо всі інші рахунки як можливі призначення
+    destination_accounts = [acc for acc in accounts if acc.id != from_account_id]
     
     currency = user.currency or "UAH"
     currency_symbol = {"UAH": "₴", "USD": "$", "EUR": "€", "GBP": "£"}.get(currency, currency)
     
-    message = f"📊 *Статистика рахунків*\n\n"
+    message = "💸 **Переказ між рахунками**\n\n"
+    message += f"📤 **Джерело:** {from_account.icon} {from_account.name}\n"
+    message += f"   💰 Доступно: `{from_account.balance:,.2f} {currency_symbol}`\n\n"
+    message += "📋 **Крок 2: Оберіть рахунок-призначення**\n\n"
     
-    if stats['total_accounts'] == 0:
-        message += "📭 Немає створених рахунків для відображення статистики."
+    if not destination_accounts:
+        message += "❌ Немає інших рахунків для переказу."
+        keyboard = [[InlineKeyboardButton("◀️ Назад", callback_data="accounts_transfer")]]
     else:
-        message += f"🏦 *Загальна інформація:*\n"
-        message += f"• Всього рахунків: `{stats['total_accounts']}`\n"
-        message += f"• Активних рахунків: `{stats['active_accounts']}`\n"
-        message += f"• Загальний баланс: `{stats['total_balance']:,.2f} {currency_symbol}`\n\n"
+        for account in destination_accounts:
+            balance_text = f"{account.balance:,.2f} {currency_symbol}"
+            message += f"{account.icon} **{account.name}**\n"
+            message += f"   💰 `{balance_text}`\n\n"
         
-        message += f"💰 *Розподіл за типами:*\n"
-        for account_type, data in stats['by_type'].items():
-            message += f"• {data['icon']} {account_type}: `{data['balance']:,.2f} {currency_symbol}` ({data['count']} рах.)\n"
+        # Створюємо кнопки для вибору рахунку-призначення
+        keyboard = []
+        for account in destination_accounts:
+            button_text = f"{account.icon} {account.name}"
+            callback_data = f"transfer_to_{from_account_id}_{account.id}"
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
         
-        message += f"\n📈 *Динаміка за місяць:*\n"
-        message += f"• Приріст балансу: `{stats['monthly_growth']:,.2f} {currency_symbol}`\n"
-        message += f"• Кількість операцій: `{stats['monthly_transactions']}`\n"
+        keyboard.append([InlineKeyboardButton("◀️ Вибір джерела", callback_data="accounts_transfer")])
     
-    keyboard = [
-        [InlineKeyboardButton("📋 Детальний звіт", callback_data="accounts_detailed_report")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="accounts_menu")]
-    ]
+    # Зберігаємо ID рахунку-джерела в контексті
+    context.user_data['transfer_from_account'] = from_account_id
     
     await query.edit_message_text(
         message,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
+
+async def show_transfer_amount_input(query, context, from_account_id, to_account_id):
+    """Показує форму для введення суми переказу"""
+    user = get_or_create_user(query.from_user.id)
+    accounts = get_user_accounts(user.id)
+    
+    from_account = next((acc for acc in accounts if acc.id == from_account_id), None)
+    to_account = next((acc for acc in accounts if acc.id == to_account_id), None)
+    
+    if not from_account or not to_account:
+        await query.edit_message_text(
+            "❌ Один з рахунків не знайдено",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("◀️ Назад до рахунків", callback_data="accounts_menu")
+            ]]),
+            parse_mode="Markdown"
+        )
+        return
+    
+    currency = user.currency or "UAH"
+    currency_symbol = {"UAH": "₴", "USD": "$", "EUR": "€", "GBP": "£"}.get(currency, currency)
+    
+    message = "💸 **Переказ між рахунками**\n\n"
+    message += f"📤 **З рахунку:** {from_account.icon} {from_account.name}\n"
+    message += f"   💰 Доступно: `{from_account.balance:,.2f} {currency_symbol}`\n\n"
+    message += f"📥 **На рахунок:** {to_account.icon} {to_account.name}\n"
+    message += f"   💰 Поточний баланс: `{to_account.balance:,.2f} {currency_symbol}`\n\n"
+    message += "📋 **Крок 3: Введіть суму переказу**\n\n"
+    message += f"💰 Введіть суму для переказу в {currency_symbol}:\n\n"
+    message += "💡 **Приклади:**\n"
+    message += "• `1000` — одна тисяча\n"
+    message += "• `500.50` — з копійками\n"
+    message += f"• `{from_account.balance:,.0f}` — весь баланс\n\n"
+    message += f"👆 *Максимум: {from_account.balance:,.2f} {currency_symbol}*"
+    
+    # Швидкі кнопки для популярних сум
+    quick_amounts = []
+    max_balance = from_account.balance
+    
+    # Додаємо кнопки для частин від балансу
+    if max_balance >= 100:
+        if max_balance >= 1000:
+            quick_amounts.extend([100, 500, 1000])
+        elif max_balance >= 500:
+            quick_amounts.extend([100, 500])
+        else:
+            quick_amounts.append(100)
+    
+    # Додаємо кнопку для половини балансу
+    if max_balance >= 20:
+        half_balance = max_balance / 2
+        quick_amounts.append(half_balance)
+    
+    # Додаємо кнопку для всього балансу
+    quick_amounts.append(max_balance)
+    
+    keyboard = []
+    
+    # Створюємо кнопки для швидких сум (по 2 в ряду)
+    for i in range(0, len(quick_amounts), 2):
+        row = []
+        for j in range(i, min(i + 2, len(quick_amounts))):
+            amount = quick_amounts[j]
+            if amount == max_balance:
+                button_text = f"💰 Весь баланс ({amount:,.0f})"
+            elif amount == max_balance / 2:
+                button_text = f"💰 Половина ({amount:,.0f})"
+            else:
+                button_text = f"💰 {amount:,.0f}"
+            callback_data = f"transfer_amount_{from_account_id}_{to_account_id}_{amount}"
+            row.append(InlineKeyboardButton(button_text, callback_data=callback_data))
+        keyboard.append(row)
+    
+    keyboard.append([InlineKeyboardButton("◀️ Вибір призначення", callback_data=f"transfer_from_{from_account_id}")])
+    
+    # Зберігаємо дані переказу в контексті
+    context.user_data['transfer_data'] = {
+        'from_account_id': from_account_id,
+        'to_account_id': to_account_id
+    }
+    context.user_data['awaiting_transfer_amount'] = True
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
+
+async def execute_transfer(query, context, from_account_id, to_account_id, amount):
+    """Виконує переказ між рахунками"""
+    try:
+        user = get_or_create_user(query.from_user.id)
+        accounts = get_user_accounts(user.id)
+        
+        from_account = next((acc for acc in accounts if acc.id == from_account_id), None)
+        to_account = next((acc for acc in accounts if acc.id == to_account_id), None)
+        
+        if not from_account or not to_account:
+            await query.edit_message_text(
+                "❌ Один з рахунків не знайдено",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("◀️ Назад до рахунків", callback_data="accounts_menu")
+                ]]),
+                parse_mode="Markdown"
+            )
+            return
+        
+        # Виконуємо переказ
+        success, message_text = transfer_between_accounts(
+            from_account_id=from_account_id,
+            to_account_id=to_account_id,
+            amount=amount,
+            description="Переказ через бота"
+        )
+        
+        currency = user.currency or "UAH"
+        currency_symbol = {"UAH": "₴", "USD": "$", "EUR": "€", "GBP": "£"}.get(currency, currency)
+        
+        if success:
+            # Оновлюємо дані рахунків після переказу
+            updated_accounts = get_user_accounts(user.id)
+            updated_from = next((acc for acc in updated_accounts if acc.id == from_account_id), None)
+            updated_to = next((acc for acc in updated_accounts if acc.id == to_account_id), None)
+            
+            success_message = "✅ **Переказ виконано успішно!**\n\n"
+            success_message += f"💸 **Переказано:** `{amount:,.2f} {currency_symbol}`\n\n"
+            success_message += f"📤 **З рахунку:** {from_account.icon} {from_account.name}\n"
+            if updated_from:
+                success_message += f"   💰 Залишок: `{updated_from.balance:,.2f} {currency_symbol}`\n\n"
+            success_message += f"📥 **На рахунок:** {to_account.icon} {to_account.name}\n"
+            if updated_to:
+                success_message += f"   💰 Новий баланс: `{updated_to.balance:,.2f} {currency_symbol}`\n\n"
+            success_message += f"📅 Дата операції: {datetime.now().strftime('%d.%m.%Y %H:%M')}\n\n"
+            success_message += "💡 **Переказ записано в історію транзакцій**"
+            
+            keyboard = [
+                [
+                    InlineKeyboardButton("📋 Мої рахунки", callback_data="accounts_list"),
+                    InlineKeyboardButton("🔄 Ще переказ", callback_data="accounts_transfer")
+                ],
+                [
+                    InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
+                ]
+            ]
+        else:
+            success_message = f"❌ **Помилка переказу**\n\n"
+            success_message += f"Деталі: {message_text}\n\n"
+            success_message += "💡 Можливі причини:\n"
+            success_message += "• Недостатньо коштів на рахунку\n"
+            success_message += "• Рахунок заблокований\n"
+            success_message += "• Технічна помилка\n\n"
+            success_message += "Спробуйте ще раз або зверніться до підтримки."
+            
+            keyboard = [
+                [
+                    InlineKeyboardButton("🔄 Спробувати знову", callback_data="accounts_transfer"),
+                    InlineKeyboardButton("📋 Мої рахунки", callback_data="accounts_list")
+                ],
+                [
+                    InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
+                ]
+            ]
+        
+        await query.edit_message_text(
+            success_message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+        
+        # Очищаємо дані переказу
+        context.user_data.pop('transfer_data', None)
+        context.user_data.pop('awaiting_transfer_amount', None)
+        
+    except Exception as e:
+        logger.error(f"Error executing transfer: {str(e)}")
+        await query.edit_message_text(
+            f"❌ **Критична помилка переказу**\n\n"
+            f"Деталі: {str(e)}\n\n"
+            f"💡 Зверніться до підтримки бота.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("◀️ Назад до рахунків", callback_data="accounts_menu")
+            ]]),
+            parse_mode="Markdown"
+        )
 
 # Обробники для створення різних типів рахунків
 async def create_cash_account(query, context):
@@ -298,18 +530,19 @@ async def show_account_name_input(query, context):
     account_type = account_data.get('name_template', 'Новий рахунок')
     icon = account_data.get('icon', '💳')
     
-    message = f"{icon} *Створення рахунку: {account_type}*\n\n"
-    message += "📝 Введіть назву для вашого нового рахунку:\n\n"
-    message += "💡 *Приклади назв:*\n"
-    message += "• Моя основна картка\n"
-    message += "• Готівка в гаманці\n"
-    message += "• ПриватБанк - зарплата\n"
-    message += "• Ощадний фонд\n\n"
-    message += "Або скористайтеся назвою за замовчуванням:"
+    message = f"{icon} **Крок 1: Назва рахунку**\n\n"
+    message += "📝 Введіть назву для рахунку:\n\n"
+    message += "💡 **Приклади:**\n"
+    message += "• Основна картка\n"
+    message += "• Готівка\n"
+    message += "• ПриватБанк\n"
+    message += "• Ощадження\n\n"
+    message += f"👆 *Або використайте: {account_type}*\n\n"
+    message += "📋 *Наступним кроком буде введення початкового балансу*"
     
     keyboard = [
-        [InlineKeyboardButton(f"✅ Використати: {account_type}", callback_data="accounts_use_default_name")],
-        [InlineKeyboardButton("🔙 Назад до типів", callback_data="accounts_add")],
+        [InlineKeyboardButton(f"✅ {account_type}", callback_data="accounts_use_default_name")],
+        [InlineKeyboardButton("◀️ Тип рахунку", callback_data="accounts_add")],
         [InlineKeyboardButton("❌ Скасувати", callback_data="accounts_menu")]
     ]
     
@@ -327,31 +560,139 @@ async def use_default_account_name(query, context):
     account_data = context.user_data.get('account_creation', {})
     account_name = account_data.get('name_template', 'Новий рахунок')
     
-    # Створюємо рахунок з назвою за замовчуванням
-    await create_account_with_name(query, context, account_name)
+    # Зберігаємо назву і переходимо до введення балансу
+    context.user_data['account_creation']['name'] = account_name
+    await show_account_balance_input(query, context)
 
-async def create_account_with_name(query, context, account_name):
-    """Створює рахунок з вказаною назвою"""
+async def show_account_balance_input(query, context):
+    """Показує форму для введення початкового балансу рахунку"""
+    account_data = context.user_data.get('account_creation', {})
+    account_name = account_data.get('name', 'Новий рахунок')
+    icon = account_data.get('icon', '💳')
+    
+    user = get_or_create_user(query.from_user.id)
+    currency = user.currency or "UAH"
+    currency_symbol = {"UAH": "₴", "USD": "$", "EUR": "€", "GBP": "£"}.get(currency, currency)
+    
+    message = f"{icon} **Крок 2: Початковий баланс**\n\n"
+    message += f"📝 Рахунок: *{account_name}*\n\n"
+    message += f"💰 Введіть початковий баланс рахунку в {currency_symbol}:\n\n"
+    message += "💡 **Приклади:**\n"
+    message += "• `5000` — п'ять тисяч\n"
+    message += "• `12500.50` — з копійками\n"
+    message += "• `0` — порожній рахунок\n\n"
+    message += f"👆 *Введіть суму в {currency_symbol} або натисніть '0' для пустого рахунку*"
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("0️⃣ Порожній (0)", callback_data="accounts_balance_zero"),
+        ],
+        [
+            InlineKeyboardButton("💰 1000", callback_data="accounts_balance_1000"),
+            InlineKeyboardButton("💰 5000", callback_data="accounts_balance_5000"),
+            InlineKeyboardButton("💰 10000", callback_data="accounts_balance_10000")
+        ],
+        [
+            InlineKeyboardButton("◀️ Назва рахунку", callback_data="accounts_edit_name"),
+            InlineKeyboardButton("❌ Скасувати", callback_data="accounts_menu")
+        ]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
+    
+    # Зберігаємо стан очікування введення балансу
+    context.user_data['awaiting_account_balance'] = True
+
+async def set_zero_balance(query, context):
+    """Встановлює нульовий баланс для рахунку"""
+    account_data = context.user_data.get('account_creation', {})
+    account_name = account_data.get('name', 'Новий рахунок')
+    
+    # Створюємо рахунок з нульовим балансом
+    await create_account_with_balance(query, context, account_name, 0.0)
+
+async def set_balance_1000(query, context):
+    """Встановлює баланс 1000 для рахунку"""
+    account_data = context.user_data.get('account_creation', {})
+    account_name = account_data.get('name', 'Новий рахунок')
+    await create_account_with_balance(query, context, account_name, 1000.0)
+
+async def set_balance_5000(query, context):
+    """Встановлює баланс 5000 для рахунку"""
+    account_data = context.user_data.get('account_creation', {})
+    account_name = account_data.get('name', 'Новий рахунок')
+    await create_account_with_balance(query, context, account_name, 5000.0)
+
+async def set_balance_10000(query, context):
+    """Встановлює баланс 10000 для рахунку"""
+    account_data = context.user_data.get('account_creation', {})
+    account_name = account_data.get('name', 'Новий рахунок')
+    await create_account_with_balance(query, context, account_name, 10000.0)
+
+async def create_account_with_balance(query, context, account_name, balance):
+    """Створює рахунок з вказаною назвою та балансом"""
     try:
         user = get_or_create_user(query.from_user.id)
         account_data = context.user_data.get('account_creation', {})
         
-        # TODO: Тут буде реальне створення рахунку в БД
-        # create_user_account(user.id, account_name, account_data['type'], account_data['icon'])
+        # Мапимо типи з тих, що використовуються в UI, на AccountType з моделі
+        type_mapping = {
+            'cash': AccountType.CASH,
+            'card': AccountType.BANK_CARD,
+            'bank': AccountType.BANK_CARD,  # Банківський рахунок як картка
+            'savings': AccountType.SAVINGS,
+            'investment': AccountType.INVESTMENT,
+            'crypto': AccountType.OTHER,  # Криптовалюта як інше
+            'other': AccountType.OTHER
+        }
         
-        success_message = f"✅ *Рахунок успішно створено!*\n\n"
-        success_message += f"{account_data.get('icon', '💳')} *{account_name}*\n"
-        success_message += f"📝 Тип: {account_data.get('type', 'unknown').title()}\n"
-        success_message += f"💰 Початковий баланс: `0.00 ₴`\n\n"
-        success_message += "💡 Тепер ви можете:\n"
-        success_message += "• Додавати транзакції до цього рахунку\n"
-        success_message += "• Переказувати кошти між рахунками\n"
-        success_message += "• Відстежувати баланс та історію операцій"
+        account_type_key = account_data.get('type', 'other')
+        account_type = type_mapping.get(account_type_key, AccountType.OTHER)
+        
+        # Створюємо рахунок в базі даних
+        new_account = create_account(
+            user_id=user.id,
+            name=account_name,
+            account_type=account_type,
+            balance=balance,
+            currency=user.currency or 'UAH',
+            is_main=False,  # Головний рахунок встановлюється окремо
+            icon=account_data.get('icon', '💳'),
+            description=f"Створено через бота - {account_type_key.title()}"
+        )
+        
+        currency_symbol = {"UAH": "₴", "USD": "$", "EUR": "€", "GBP": "£"}.get(user.currency or 'UAH', '₴')
+        
+        success_message = f"✅ **Рахунок успішно створено!**\n\n"
+        success_message += f"{account_data.get('icon', '💳')} **{account_name}**\n"
+        success_message += f"📝 Тип: {account_type_key.replace('_', ' ').title()}\n"
+        success_message += f"💰 Початковий баланс: `{balance:,.2f} {currency_symbol}`\n"
+        success_message += f"🆔 ID рахунку: `{new_account.id}`\n\n"
+        
+        if balance > 0:
+            success_message += "💡 **Рахунок готовий до використання!**\n"
+            success_message += "• Додавайте нові доходи та витрати\n"
+            success_message += "• Переказуйте кошти між рахунками\n"
+            success_message += "• Відстежуйте зміни балансу\n"
+            success_message += "• Переглядайте статистику по рахунку"
+        else:
+            success_message += "💡 **Рахунок створено з нульовим балансом:**\n"
+            success_message += "• Додайте перший дохід для поповнення\n"
+            success_message += "• Введіть початкові кошти як транзакцію\n"
+            success_message += "• Переказуйте кошти з інших рахунків"
         
         keyboard = [
-            [InlineKeyboardButton("📋 Переглянути рахунки", callback_data="accounts_list")],
-            [InlineKeyboardButton("➕ Створити ще один", callback_data="accounts_add")],
-            [InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")]
+            [
+                InlineKeyboardButton("📋 Мої рахунки", callback_data="accounts_list"),
+                InlineKeyboardButton("➕ Створити ще", callback_data="accounts_add")
+            ],
+            [
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
+            ]
         ]
         
         await query.edit_message_text(
@@ -363,48 +704,222 @@ async def create_account_with_name(query, context, account_name):
         # Очищаємо дані створення рахунку
         context.user_data.pop('account_creation', None)
         context.user_data.pop('awaiting_account_name', None)
+        context.user_data.pop('awaiting_account_balance', None)
         
     except Exception as e:
         logger.error(f"Error creating account: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка створення рахунку. Спробуйте ще раз.",
+            f"❌ **Помилка створення рахунку**\n\n"
+            f"Деталі: {str(e)}\n\n"
+            f"💡 Спробуйте ще раз або зверніться до підтримки.",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 Назад", callback_data="accounts_menu")
+                InlineKeyboardButton("◀️ Назад до рахунків", callback_data="accounts_menu")
             ]]),
             parse_mode="Markdown"
         )
 
 # Функція для обробки введення тексту (буде викликана в text_handler)
-async def handle_account_name_input(message, context):
-    """Обробляє введення назви рахунку користувачем"""
+async def handle_account_text_input(message, context):
+    """Обробляє введення тексту користувачем для рахунків"""
+    # Обробка введення назви рахунку
     if context.user_data.get('awaiting_account_name'):
         account_name = message.text.strip()
         
+        # Перевірка довжини назви
         if len(account_name) > 50:
             await message.reply_text(
-                "❌ Назва рахунку занадто довга. Максимум 50 символів.",
+                "❌ **Назва занадто довга**\n\n"
+                "Максимальна довжина: 50 символів\n"
+                "Поточна довжина: {}\n\n"
+                "💡 Спробуйте коротшу назву".format(len(account_name)),
                 parse_mode="Markdown"
             )
-            return
+            return True
         
         if len(account_name) < 2:
             await message.reply_text(
-                "❌ Назва рахунку занадто коротка. Мінімум 2 символи.",
+                "❌ **Назва занадто коротка**\n\n"
+                "Мінімальна довжина: 2 символи\n\n"
+                "💡 Введіть більш описову назву",
                 parse_mode="Markdown"
             )
-            return
+            return True
         
-        # Створюємо фейкове query для подальшої обробки
-        class FakeQuery:
-            def __init__(self, message):
-                self.message = message
-                self.from_user = message.from_user
+        # Перевірка на заборонені символи
+        forbidden_chars = ['<', '>', '&', '"', "'", '`']
+        if any(char in account_name for char in forbidden_chars):
+            await message.reply_text(
+                "❌ **Недозволені символи**\n\n"
+                f"Заборонені символи: {', '.join(forbidden_chars)}\n\n"
+                "💡 Використовуйте тільки букви, цифри та базові знаки пунктуації",
+                parse_mode="Markdown"
+            )
+            return True
+        
+        try:
+            # Зберігаємо назву і переходимо до введення балансу
+            context.user_data['account_creation']['name'] = account_name
+            context.user_data.pop('awaiting_account_name', None)
+            
+            # Створюємо фейкове query для переходу до введення балансу
+            class FakeQuery:
+                def __init__(self, message):
+                    self.message = message
+                    self.from_user = message.from_user
+                    
+                async def edit_message_text(self, text, reply_markup=None, parse_mode=None):
+                    await self.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+            
+            fake_query = FakeQuery(message)
+            await show_account_balance_input(fake_query, context)
+            
+        except Exception as e:
+            logger.error(f"Error handling account name input: {str(e)}")
+            await message.reply_text(
+                "❌ **Помилка при обробці назви рахунку**\n\n"
+                "Спробуйте ще раз або зверніться до підтримки.",
+                parse_mode="Markdown"
+            )
+        
+        return True  # Вказуємо, що повідомлення оброблене
+    
+    # Обробка введення балансу рахунку
+    elif context.user_data.get('awaiting_account_balance'):
+        balance_text = message.text.strip()
+        
+        try:
+            # Парсимо суму
+            balance = float(balance_text.replace(',', '.'))
+            
+            if balance < 0:
+                await message.reply_text(
+                    "❌ **Від'ємний баланс недозволений**\n\n"
+                    "💡 Введіть позитивну суму або 0",
+                    parse_mode="Markdown"
+                )
+                return True
+            
+            if balance > 999999999:
+                await message.reply_text(
+                    "❌ **Сума занадто велика**\n\n"
+                    "Максимум: 999,999,999\n\n"
+                    "💡 Введіть реальну суму",
+                    parse_mode="Markdown"
+                )
+                return True
                 
-            async def edit_message_text(self, text, reply_markup=None, parse_mode=None):
-                await self.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+            # Створюємо рахунок з введеним балансом
+            account_data = context.user_data.get('account_creation', {})
+            account_name = account_data.get('name', 'Новий рахунок')
+            
+            class FakeQuery:
+                def __init__(self, message):
+                    self.message = message
+                    self.from_user = message.from_user
+                    
+                async def edit_message_text(self, text, reply_markup=None, parse_mode=None):
+                    await self.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+            
+            fake_query = FakeQuery(message)
+            await create_account_with_balance(fake_query, context, account_name, balance)
+            
+        except ValueError:
+            await message.reply_text(
+                "❌ **Неправильний формат суми**\n\n"
+                "💡 **Приклади правильного формату:**\n"
+                "• `5000`\n"
+                "• `12500.50`\n"
+                "• `0`\n\n"
+                "Спробуйте ще раз:",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Error handling account balance input: {str(e)}")
+            await message.reply_text(
+                "❌ **Помилка при обробці суми**\n\n"
+                "Спробуйте ще раз або зверніться до підтримки.",
+                parse_mode="Markdown"
+            )
         
-        fake_query = FakeQuery(message)
-        await create_account_with_name(fake_query, context, account_name)
+        return True  # Вказуємо, що повідомлення оброблене
+    
+    # Обробка введення суми переказу
+    elif context.user_data.get('awaiting_transfer_amount'):
+        amount_text = message.text.strip()
+        transfer_data = context.user_data.get('transfer_data', {})
+        
+        try:
+            # Парсимо суму
+            amount = float(amount_text.replace(',', '.'))
+            
+            if amount <= 0:
+                await message.reply_text(
+                    "❌ **Сума повинна бути більше нуля**\n\n"
+                    "💡 Введіть позитивну суму для переказу",
+                    parse_mode="Markdown"
+                )
+                return True
+            
+            # Перевіряємо доступний баланс
+            user = get_or_create_user(message.from_user.id)
+            accounts = get_user_accounts(user.id)
+            from_account = next((acc for acc in accounts if acc.id == transfer_data.get('from_account_id')), None)
+            
+            if not from_account:
+                await message.reply_text(
+                    "❌ **Рахунок-джерело не знайдено**\n\n"
+                    "💡 Почніть переказ заново",
+                    parse_mode="Markdown"
+                )
+                return True
+            
+            if amount > from_account.balance:
+                currency = user.currency or "UAH"
+                currency_symbol = {"UAH": "₴", "USD": "$", "EUR": "€", "GBP": "£"}.get(currency, currency)
+                await message.reply_text(
+                    f"❌ **Недостатньо коштів**\n\n"
+                    f"Доступно: `{from_account.balance:,.2f} {currency_symbol}`\n"
+                    f"Запитано: `{amount:,.2f} {currency_symbol}`\n\n"
+                    f"💡 Введіть суму не більше {from_account.balance:,.2f}",
+                    parse_mode="Markdown"
+                )
+                return True
+                
+            # Виконуємо переказ
+            class FakeQuery:
+                def __init__(self, message):
+                    self.message = message
+                    self.from_user = message.from_user
+                    
+                async def edit_message_text(self, text, reply_markup=None, parse_mode=None):
+                    await self.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+            
+            fake_query = FakeQuery(message)
+            await execute_transfer(
+                fake_query, 
+                context, 
+                transfer_data.get('from_account_id'), 
+                transfer_data.get('to_account_id'), 
+                amount
+            )
+            
+        except ValueError:
+            await message.reply_text(
+                "❌ **Неправильний формат суми**\n\n"
+                "💡 **Приклади правильного формату:**\n"
+                "• `1000`\n"
+                "• `500.50`\n"
+                "• `250`\n\n"
+                "Спробуйте ще раз:",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Error handling transfer amount input: {str(e)}")
+            await message.reply_text(
+                "❌ **Помилка при обробці суми**\n\n"
+                "Спробуйте ще раз або зверніться до підтримки.",
+                parse_mode="Markdown"
+            )
         
         return True  # Вказуємо, що повідомлення оброблене
     

@@ -52,7 +52,7 @@ class FinancialReport:
         return "Користувач"
     
     def generate_expense_pie_chart(self, year=None, month=None, save_path=None):
-        """Генерація кругової діаграми витрат за категоріями"""
+        """Генерація сучасної кругової діаграми витрат за категоріями"""
         try:
             if year is None or month is None:
                 now = datetime.now()
@@ -80,60 +80,107 @@ class FinancialReport:
             if not expenses_by_category:
                 return None, "Немає даних про витрати за вказаний період"
             
-            # Підготовка даних для діаграми без емодзі
-            labels = [cat[0] for cat in expenses_by_category]  # Тільки назви категорій
-            values = [cat[2] for cat in expenses_by_category]
+            # Підготовка даних для діаграми
+            categories = [cat[0] for cat in expenses_by_category]
+            amounts = [cat[2] for cat in expenses_by_category]
             
-            # Якщо більше 7 категорій, об'єднуємо найменші в "Інше"
-            if len(labels) > 7:
-                top_labels = labels[:6]
-                top_values = values[:6]
-                other_value = sum(values[6:])
-                top_labels.append("Інше")
-                top_values.append(other_value)
-                labels = top_labels
-                values = top_values
+            # Беремо топ-7 категорій, решту об'єднуємо в "Інше"
+            if len(categories) > 7:
+                top_categories = categories[:6]
+                top_amounts = amounts[:6]
+                other_amount = sum(amounts[6:])
+                if other_amount > 0:
+                    top_categories.append("Інше")
+                    top_amounts.append(other_amount)
+                categories = top_categories
+                amounts = top_amounts
             
-            # Створюємо чітку діаграму з більшими розмірами
-            plt.figure(figsize=(12, 8), dpi=150)
+            # Налаштовуємо українські шрифти
+            plt.rcParams['font.family'] = ['DejaVu Sans', 'Arial', 'sans-serif']
+            
+            # Створюємо фігуру з правильними пропорціями - збільшуємо розмір
+            fig, ax = plt.subplots(figsize=(14, 12), facecolor='white')
+            
             # Сучасна кольорова палітра
-            colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#FF9FF3', '#54A0FF', '#5F27CD']
-            colors = colors[:len(labels)]
+            modern_colors = [
+                '#FF6B8A',  # Рожевий
+                '#4ECDC4',  # Бірюзовий  
+                '#45B7D1',  # Блакитний
+                '#96CEB4',  # М'ятний
+                '#FECA57',  # Жовтий
+                '#A55EEA',  # Фіолетовий
+                '#26D0CE',  # Аквамарин
+                '#FF9FF3'   # Лавандовий
+            ]
             
-            # Функція для відображення відсотків тільки у великих секторах
-            def autopct_format(pct):
-                return f'{pct:.1f}%' if pct > 4 else ''
+            # Розрахунок загальної суми
+            total_amount = sum(amounts)
             
-            plt.pie(values, labels=None, autopct=autopct_format, startangle=90, 
-                    colors=colors, wedgeprops={'edgecolor': 'white', 'linewidth': 3},
-                    textprops={'fontsize': 16, 'fontweight': 'bold'}, pctdistance=0.85)
-            plt.axis('equal')
+            # Створюємо кругову діаграму без підписів (пончикова діаграма)
+            wedges, texts, autotexts = plt.pie(
+                amounts, 
+                labels=None,  # Не показуємо підписи на діаграмі
+                autopct=lambda pct: f'{pct:.1f}%' if pct > 5 else '',  # Показуємо відсотки тільки для великих секторів
+                startangle=90,
+                colors=modern_colors[:len(categories)],
+                wedgeprops=dict(width=0.7, edgecolor='white', linewidth=2),  # Робимо пончикову діаграму
+                pctdistance=0.85
+            )
             
-            # Лаконічний заголовок з більшим шрифтом
+            # Налаштування відсотків - збільшуємо розмір
+            for autotext in autotexts:
+                autotext.set_color('#2C3E50')
+                autotext.set_fontweight('bold')
+                autotext.set_fontsize(24)
+            
+            # Додаємо центральний текст із загальною сумою
+            centre_circle = plt.Circle((0,0), 0.4, fc='white', linewidth=2, edgecolor='#E8E8E8')
+            ax.add_artist(centre_circle)
+            
+            # Центральний текст - збільшуємо розміри
+            plt.text(0, 0.1, f'{total_amount:,.0f}', ha='center', va='center', 
+                     fontsize=32, fontweight='bold', color='#2C3E50')
+            plt.text(0, -0.1, 'грн', ha='center', va='center', 
+                     fontsize=28, color='#7F8C8D')
+            
+            # Створюємо красиву легенду
+            import matplotlib.patches as mpatches
+            legend_elements = []
+            for i, (category, amount) in enumerate(zip(categories, amounts)):
+                percentage = (amount / total_amount) * 100
+                label = f"{category}: {amount:,.0f} грн ({percentage:.1f}%)"
+                legend_elements.append(mpatches.Patch(color=modern_colors[i], label=label))
+            
+            # Розміщуємо легенду поза діаграмою - збільшуємо розмір тексту
+            plt.legend(
+                handles=legend_elements,
+                loc='center left',
+                bbox_to_anchor=(1.1, 0.5),
+                fontsize=26,
+                frameon=False
+            )
+            
+            # Налаштовуємо заголовок - збільшуємо розмір
             month_names = {
                 1: "січень", 2: "лютий", 3: "березень", 4: "квітень",
                 5: "травень", 6: "червень", 7: "липень", 8: "серпень",
                 9: "вересень", 10: "жовтень", 11: "листопад", 12: "грудень"
             }
             month_name = month_names.get(month, str(month))
-            plt.title(f"Розподіл витрат за категоріями: {month_name} {year}", fontsize=32, fontweight='bold', pad=30)
-            
-            # Легенда справа з сумами (без емодзі) з більшим шрифтом
-            legend_labels = [f"{label}: {value:.0f}₴" for label, value in zip(labels, values)]
-            plt.legend(legend_labels, loc="center left", bbox_to_anchor=(1.05, 0.5), fontsize=18)
-            
-            # Тісний вигляд
-            plt.tight_layout()
+            plt.title(f"Розподіл витрат: {month_name} {year}", fontsize=32, fontweight='bold', pad=30, color='#2C3E50')
+            plt.axis('equal')
             
             # Зберігаємо або повертаємо діаграму
             if save_path:
-                plt.savefig(save_path, dpi=100, bbox_inches='tight')
+                plt.savefig(save_path, format='png', dpi=300, bbox_inches='tight', 
+                           facecolor='white', edgecolor='none', pad_inches=0.3)
                 plt.close()
                 return save_path, None
             else:
-                # Зберігаємо в буфер
+                # Зберігаємо в буфер з покращеними налаштуваннями
                 buffer = io.BytesIO()
-                plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+                plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight', 
+                           facecolor='white', edgecolor='none', pad_inches=0.3)
                 buffer.seek(0)
                 plt.close()
                 return buffer, None
@@ -143,7 +190,7 @@ class FinancialReport:
             return None, str(e)
     
     def generate_income_pie_chart(self, year=None, month=None, save_path=None):
-        """Генерація кругової діаграми доходів за категоріями"""
+        """Генерація сучасної кругової діаграми доходів за категоріями"""
         try:
             if year is None or month is None:
                 now = datetime.now()
@@ -171,60 +218,107 @@ class FinancialReport:
             if not income_by_category:
                 return None, "Немає даних про доходи за вказаний період"
             
-            # Підготовка даних для діаграми без емодзі
-            labels = [cat[0] for cat in income_by_category]  # Тільки назви категорій
-            values = [cat[2] for cat in income_by_category]
+            # Підготовка даних для діаграми
+            categories = [cat[0] for cat in income_by_category]
+            amounts = [cat[2] for cat in income_by_category]
             
-            # Якщо більше 7 категорій, об'єднуємо найменші в "Інше"
-            if len(labels) > 7:
-                top_labels = labels[:6]
-                top_values = values[:6]
-                other_value = sum(values[6:])
-                top_labels.append("Інше")
-                top_values.append(other_value)
-                labels = top_labels
-                values = top_values
+            # Беремо топ-7 категорій, решту об'єднуємо в "Інше"
+            if len(categories) > 7:
+                top_categories = categories[:6]
+                top_amounts = amounts[:6]
+                other_amount = sum(amounts[6:])
+                if other_amount > 0:
+                    top_categories.append("Інше")
+                    top_amounts.append(other_amount)
+                categories = top_categories
+                amounts = top_amounts
             
-            # Створюємо чітку діаграму для доходів з більшими розмірами
-            plt.figure(figsize=(12, 8), dpi=150)
+            # Налаштовуємо українські шрифти
+            plt.rcParams['font.family'] = ['DejaVu Sans', 'Arial', 'sans-serif']
+            
+            # Створюємо фігуру з правильними пропорціями - збільшуємо розмір
+            fig, ax = plt.subplots(figsize=(14, 12), facecolor='white')
+            
             # Сучасна зелена палітра для доходів
-            colors = ['#2ECC71', '#27AE60', '#16A085', '#1ABC9C', '#58D68D', '#52C41A', '#73D13D', '#95DE64']
-            colors = colors[:len(labels)]
+            modern_colors = [
+                '#2ECC71',  # Яскраво-зелений
+                '#27AE60',  # Зелений
+                '#16A085',  # Темно-бірюзовий
+                '#1ABC9C',  # Бірюзовий
+                '#58D68D',  # Світло-зелений
+                '#52C41A',  # Лайм
+                '#73D13D',  # Салатовий
+                '#95DE64'   # Світло-салатовий
+            ]
             
-            # Функція для відображення відсотків тільки у великих секторах
-            def autopct_format(pct):
-                return f'{pct:.1f}%' if pct > 5 else ''
+            # Розрахунок загальної суми
+            total_amount = sum(amounts)
             
-            plt.pie(values, labels=None, autopct=autopct_format, startangle=90, 
-                    colors=colors, wedgeprops={'edgecolor': 'white', 'linewidth': 3},
-                    textprops={'fontsize': 18, 'fontweight': 'bold'}, pctdistance=0.85)
-            plt.axis('equal')
+            # Створюємо кругову діаграму без підписів (пончикова діаграма)
+            wedges, texts, autotexts = plt.pie(
+                amounts, 
+                labels=None,  # Не показуємо підписи на діаграмі
+                autopct=lambda pct: f'{pct:.1f}%' if pct > 5 else '',  # Показуємо відсотки тільки для великих секторів
+                startangle=90,
+                colors=modern_colors[:len(categories)],
+                wedgeprops=dict(width=0.7, edgecolor='white', linewidth=2),  # Робимо пончикову діаграму
+                pctdistance=0.85
+            )
             
-            # Лаконічний заголовок з більшим шрифтом
+            # Налаштування відсотків - збільшуємо розмір
+            for autotext in autotexts:
+                autotext.set_color('#2C3E50')
+                autotext.set_fontweight('bold')
+                autotext.set_fontsize(24)
+            
+            # Додаємо центральний текст із загальною сумою
+            centre_circle = plt.Circle((0,0), 0.4, fc='white', linewidth=2, edgecolor='#E8E8E8')
+            ax.add_artist(centre_circle)
+            
+            # Центральний текст - збільшуємо розміри
+            plt.text(0, 0.1, f'{total_amount:,.0f}', ha='center', va='center', 
+                     fontsize=32, fontweight='bold', color='#2C3E50')
+            plt.text(0, -0.1, 'грн', ha='center', va='center', 
+                     fontsize=28, color='#7F8C8D')
+            
+            # Створюємо красиву легенду
+            import matplotlib.patches as mpatches
+            legend_elements = []
+            for i, (category, amount) in enumerate(zip(categories, amounts)):
+                percentage = (amount / total_amount) * 100
+                label = f"{category}: {amount:,.0f} грн ({percentage:.1f}%)"
+                legend_elements.append(mpatches.Patch(color=modern_colors[i], label=label))
+            
+            # Розміщуємо легенду поза діаграмою - збільшуємо розмір тексту
+            plt.legend(
+                handles=legend_elements,
+                loc='center left',
+                bbox_to_anchor=(1.1, 0.5),
+                fontsize=26,
+                frameon=False
+            )
+            
+            # Налаштовуємо заголовок - збільшуємо розмір
             month_names = {
                 1: "січень", 2: "лютий", 3: "березень", 4: "квітень",
                 5: "травень", 6: "червень", 7: "липень", 8: "серпень",
                 9: "вересень", 10: "жовтень", 11: "листопад", 12: "грудень"
             }
             month_name = month_names.get(month, str(month))
-            plt.title(f"Розподіл доходів за категоріями: {month_name} {year}", fontsize=20, fontweight='bold', pad=30)
-            
-            # Легенда справа з сумами (без емодзі) з більшим шрифтом
-            legend_labels = [f"{label}: {value:.0f}₴" for label, value in zip(labels, values)]
-            plt.legend(legend_labels, loc="center left", bbox_to_anchor=(1.05, 0.5), fontsize=16)
-            
-            # Тісний вигляд
-            plt.tight_layout()
+            plt.title(f"Розподіл доходів: {month_name} {year}", fontsize=32, fontweight='bold', pad=30, color='#2C3E50')
+            plt.axis('equal')
             
             # Зберігаємо або повертаємо діаграму
             if save_path:
-                plt.savefig(save_path, dpi=100, bbox_inches='tight')
+                plt.savefig(save_path, format='png', dpi=300, bbox_inches='tight', 
+                           facecolor='white', edgecolor='none', pad_inches=0.3)
                 plt.close()
                 return save_path, None
             else:
-                # Зберігаємо в буфер
+                # Зберігаємо в буфер з покращеними налаштуваннями
                 buffer = io.BytesIO()
-                plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+                plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight', 
+                           facecolor='white', edgecolor='none', pad_inches=0.3)
                 buffer.seek(0)
                 plt.close()
                 return buffer, None

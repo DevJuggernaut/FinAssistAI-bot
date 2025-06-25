@@ -34,18 +34,18 @@ async def show_settings_menu(query, context):
                 InlineKeyboardButton("🗑️ Очистити дані", callback_data="settings_clear_data")
             ],
             [
-                InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
             ]
         ]
         
         text = (
-            "⚙️ **Налаштування FinAssist**\n\n"
-            "Керуйте своїм профілем та даними:\n\n"
-            "🏷️ *Категорії* — управління вашими категоріями транзакцій\n"
-            "💱 *Основна валюта* — вибір валюти для відображення\n"
-            "📤 *Експорт даних* — завантаження ваших транзакцій\n"
-            "🗑️ *Очистити дані* — видалення всіх транзакцій\n\n"
-            "💡 *Підказка:* Всі зміни зберігаються автоматично"
+            "⚙️ **Налаштування**\n\n"
+            "Керуйте своїм профілем:\n\n"
+            "🏷️ **Категорії** — управління категоріями\n"
+            "💱 **Валюта** — основна валюта відображення\n"
+            "📤 **Експорт** — завантаження ваших даних\n"
+            "🗑️ **Очистити** — видалення всіх транзакцій\n\n"
+            "💡 *Зміни зберігаються автоматично*"
         )
         
         await query.edit_message_text(
@@ -57,63 +57,124 @@ async def show_settings_menu(query, context):
     except Exception as e:
         logger.error(f"Error in show_settings_menu: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка при завантаженні налаштувань",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")]])
+            "❌ Не вдалося завантажити налаштування",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]])
         )
 
 # ==================== УПРАВЛІННЯ КАТЕГОРІЯМИ ====================
 
 async def show_categories_management(query, context):
-    """Показує меню управління категоріями"""
+    """Показує меню управління категоріями з інтерактивними кнопками"""
+async def show_categories_management(query, context):
+    """Показує меню управління категоріями з пагінацією"""
     try:
         user = get_user(query.from_user.id)
         if not user:
             await query.edit_message_text("❌ Користувач не знайдений")
             return
         
-        # Отримуємо категорії користувача
-        expense_categories = get_user_categories(user.id, TransactionType.EXPENSE)
-        income_categories = get_user_categories(user.id, TransactionType.INCOME)
+        # Ініціалізуємо або отримуємо параметри перегляду категорій
+        if 'categories_view' not in context.user_data:
+            context.user_data['categories_view'] = {
+                'page': 1,
+                'per_page': 8,  # 8 категорій на сторінку
+                'show_type': 'all'  # 'all', 'income', 'expense'
+            }
         
-        text = "🏷️ **Категорії**\n\n"
+        view_params = context.user_data['categories_view']
+        page = view_params.get('page', 1)
+        per_page = view_params.get('per_page', 8)
+        show_type = view_params.get('show_type', 'all')
         
-        # Показуємо категорії витрат
-        if expense_categories:
-            text += "💸 *Категорії витрат:*\n"
-            for cat in expense_categories[:8]:  # Показуємо перші 8
-                icon = getattr(cat, 'icon', '💸')
-                text += f"• {icon} {cat.name}\n"
-            if len(expense_categories) > 8:
-                text += f"... та ще {len(expense_categories) - 8}\n"
-        else:
-            text += "💸 *Категорії витрат:* відсутні\n"
+        # Отримуємо всі категорії
+        expense_categories = get_user_categories(user.id, TransactionType.EXPENSE.value)
+        income_categories = get_user_categories(user.id, TransactionType.INCOME.value)
         
-        text += "\n"
+        # Фільтруємо категорії за типом
+        if show_type == 'expense':
+            all_categories = [('expense', cat) for cat in expense_categories]
+        elif show_type == 'income':
+            all_categories = [('income', cat) for cat in income_categories]
+        else:  # show_type == 'all'
+            all_categories = []
+            # Спочатку додаємо витрати, потім доходи
+            all_categories.extend([('expense', cat) for cat in expense_categories])
+            all_categories.extend([('income', cat) for cat in income_categories])
         
-        # Показуємо категорії доходів
-        if income_categories:
-            text += "💰 *Категорії доходів:*\n"
-            for cat in income_categories[:5]:  # Показуємо перші 5
-                icon = getattr(cat, 'icon', '💰')
-                text += f"• {icon} {cat.name}\n"
-            if len(income_categories) > 5:
-                text += f"... та ще {len(income_categories) - 5}\n"
-        else:
-            text += "💰 *Категорії доходів:* відсутні\n"
+        total_categories = len(all_categories)
         
-        keyboard = [
-            [
-                InlineKeyboardButton("➕ Додати категорію", callback_data="add_category"),
-                InlineKeyboardButton("📋 Всі категорії", callback_data="view_all_categories")
-            ],
-            [
-                InlineKeyboardButton("🗑️ Видалити категорію", callback_data="delete_category_select"),
-                InlineKeyboardButton("✏️ Редагувати", callback_data="edit_category_select")
-            ],
-            [
-                InlineKeyboardButton("🔙 Назад", callback_data="settings")
+        if total_categories == 0:
+            text = "🏷️ **Категорії**\n\n📭 У вас немає категорій.\nСтворіть першу категорію!"
+            keyboard = [
+                [InlineKeyboardButton("➕ Створити категорію", callback_data="add_category")],
+                [InlineKeyboardButton("◀️ Налаштування", callback_data="settings")]
             ]
-        ]
+        else:
+            # Розраховуємо пагінацію
+            total_pages = max(1, (total_categories + per_page - 1) // per_page)
+            start_idx = (page - 1) * per_page
+            end_idx = min(start_idx + per_page, total_categories)
+            
+            # Формуємо заголовок
+            type_filter_text = ""
+            if show_type == 'expense':
+                type_filter_text = " (Витрати)"
+            elif show_type == 'income':
+                type_filter_text = " (Доходи)"
+            
+            text = f"🏷️ **Категорії{type_filter_text}**\n"
+            text += f"📄 Сторінка {page} з {total_pages} | Всього: {total_categories}\n\n"
+            text += "💡 *Натисніть на категорію для редагування або видалення*\n\n"
+            
+            keyboard = []
+            
+            # Групуємо категорії для відображення
+            current_categories = all_categories[start_idx:end_idx]
+            current_section = None
+            
+            for cat_type, cat in current_categories:
+                # Додаємо заголовок секції, якщо змінився тип
+                if show_type == 'all' and current_section != cat_type:
+                    current_section = cat_type
+                    if cat_type == 'expense':
+                        keyboard.append([InlineKeyboardButton("💸 ── ВИТРАТИ ──", callback_data="noop_header")])
+                    else:
+                        keyboard.append([InlineKeyboardButton("💰 ── ДОХОДИ ──", callback_data="noop_header")])
+                
+                # Додаємо кнопку категорії
+                icon = getattr(cat, 'icon', '💸' if cat_type == 'expense' else '💰')
+                status = " 🔧" if getattr(cat, 'is_default', False) else ""
+                button_text = f"{icon} {cat.name}{status}"
+                keyboard.append([InlineKeyboardButton(button_text, callback_data=f"edit_category_{cat.id}")])
+            
+            # Додаємо кнопки фільтрів
+            filter_row = []
+            if show_type != 'expense':
+                filter_row.append(InlineKeyboardButton("� Витрати", callback_data="categories_filter_expense"))
+            if show_type != 'income':
+                filter_row.append(InlineKeyboardButton("💰 Доходи", callback_data="categories_filter_income"))
+            if show_type != 'all':
+                filter_row.append(InlineKeyboardButton("📋 Всі", callback_data="categories_filter_all"))
+            
+            if filter_row:
+                keyboard.append(filter_row)
+            
+            # Додаємо кнопки пагінації, якщо потрібно
+            pagination_row = []
+            if page > 1:
+                pagination_row.append(InlineKeyboardButton("◀️ Попередня", callback_data="categories_prev_page"))
+            if page < total_pages:
+                pagination_row.append(InlineKeyboardButton("Наступна ▶️", callback_data="categories_next_page"))
+                
+            if pagination_row:
+                keyboard.append(pagination_row)
+            
+            # Додаємо функціональні кнопки
+            keyboard.append([InlineKeyboardButton("➕ Нова категорія", callback_data="add_category")])
+            keyboard.append([InlineKeyboardButton("◀️ Налаштування", callback_data="settings")])
+            
+            if show_type == 'all':
+                text += "🔧 — системні категорії (захищені від видалення)"
         
         await query.edit_message_text(
             text=text,
@@ -124,28 +185,28 @@ async def show_categories_management(query, context):
     except Exception as e:
         logger.error(f"Error in show_categories_management: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка при завантаженні категорій",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="settings")]])
+            "❌ Не вдалося завантажити категорії",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="settings")]])
         )
 
 async def show_add_category_menu(query, context):
     """Показує меню додавання категорії"""
     keyboard = [
         [
-            InlineKeyboardButton("💸 Категорія витрат", callback_data="add_category_expense"),
-            InlineKeyboardButton("💰 Категорія доходів", callback_data="add_category_income")
+            InlineKeyboardButton("💸 Витрати", callback_data="add_category_expense"),
+            InlineKeyboardButton("💰 Доходи", callback_data="add_category_income")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="settings_categories")
+            InlineKeyboardButton("◀️ Назад", callback_data="settings_categories")
         ]
     ]
     
     text = (
-        "➕ **Додати нову категорію**\n\n"
-        "Виберіть тип категорії:\n\n"
-        "💸 *Категорія витрат* — для класифікації ваших трат\n"
-        "💰 *Категорія доходів* — для типів надходжень\n\n"
-        "💡 *Підказка:* Після вибору типу введіть назву категорії"
+        "➕ **Нова категорія**\n\n"
+        "Оберіть тип:\n\n"
+        "💸 *Витрати* — для класифікації трат\n"
+        "💰 *Доходи* — для типів надходжень\n\n"
+        "💡 *Далі введіть назву категорії*"
     )
     
     await query.edit_message_text(
@@ -169,10 +230,11 @@ async def show_delete_category_select(query, context):
         if not user_categories:
             text = (
                 "🗑️ **Видалення категорій**\n\n"
-                "У вас немає категорій, які можна видалити.\n"
-                "Системні категорії видаляти не можна."
+                "📭 Немає категорій для видалення\n\n"
+                "Можна видаляти лише власні категорії.\n"
+                "Системні категорії захищені від видалення."
             )
-            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="settings_categories")]]
+            keyboard = [[InlineKeyboardButton("◀️ Назад", callback_data="settings_categories")]]
         else:
             text = "🗑️ **Оберіть категорію для видалення:**\n\n"
             
@@ -183,7 +245,7 @@ async def show_delete_category_select(query, context):
                 button_text = f"{type_emoji} {icon} {cat.name}"
                 keyboard.append([InlineKeyboardButton(button_text, callback_data=f"confirm_delete_cat_{cat.id}")])
             
-            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="settings_categories")])
+            keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="settings_categories")])
         
         await query.edit_message_text(
             text=text,
@@ -194,8 +256,8 @@ async def show_delete_category_select(query, context):
     except Exception as e:
         logger.error(f"Error in show_delete_category_select: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка при завантаженні категорій",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="settings_categories")]])
+            "❌ Не вдалося завантажити категорії",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="settings_categories")]])
         )
 
 async def confirm_delete_category(query, context, category_id):
@@ -214,15 +276,14 @@ async def confirm_delete_category(query, context, category_id):
         
         text = (
             f"⚠️ **Підтвердження видалення**\n\n"
-            f"Ви дійсно хочете видалити категорію:\n"
-            f"**{category.name}**?\n\n"
+            f"Видалити категорію **{category.name}**?\n\n"
         )
         
         if transactions_count > 0:
-            text += f"⚠️ *Увага:* З цією категорією пов'язано {transactions_count} транзакцій.\n"
-            text += "Після видалення категорії транзакції залишаться, але без категорії.\n\n"
+            text += f"⚠️ *Увага:* {transactions_count} транзакцій використовують цю категорію.\n"
+            text += "Вони залишаться, але без категорії.\n\n"
         
-        text += "❗ *Ця дія незворотна!*"
+        text += "❗ *Дія незворотна*"
         
         keyboard = [
             [
@@ -242,8 +303,8 @@ async def confirm_delete_category(query, context, category_id):
     except Exception as e:
         logger.error(f"Error in confirm_delete_category: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка при підтвердженні видалення",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="settings_categories")]])
+            "❌ Не вдалося підтвердити видалення",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="settings_categories")]])
         )
 
 async def delete_category_confirmed(query, context, category_id):
@@ -265,14 +326,14 @@ async def delete_category_confirmed(query, context, category_id):
         session.close()
         
         text = (
-            f"✅ **Категорія видалена**\n\n"
-            f"Категорія **{category_name}** успішно видалена."
+            f"✅ **Категорію видалено**\n\n"
+            f"**{category_name}** більше не існує"
         )
         
         keyboard = [
             [
-                InlineKeyboardButton("🔙 До категорій", callback_data="settings_categories"),
-                InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")
+                InlineKeyboardButton("◀️ До категорій", callback_data="settings_categories"),
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
             ]
         ]
         
@@ -285,8 +346,8 @@ async def delete_category_confirmed(query, context, category_id):
     except Exception as e:
         logger.error(f"Error in delete_category_confirmed: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка при видаленні категорії",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="settings_categories")]])
+            "❌ Не вдалося видалити категорію",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="settings_categories")]])
         )
 
 # ==================== НАЛАШТУВАННЯ ВАЛЮТИ ====================
@@ -306,9 +367,9 @@ async def show_currency_settings(query, context):
         ]
         
         text = (
-            f"💱 **Налаштування валюти**\n\n"
-            f"Поточна валюта: **{current_currency}**\n\n"
-            "Оберіть основну валюту для відображення сум:"
+            f"💱 **Валюта відображення**\n\n"
+            f"Поточна: **{current_currency}**\n\n"
+            "Оберіть основну валюту для показу сум:"
         )
         
         keyboard = []
@@ -317,7 +378,7 @@ async def show_currency_settings(query, context):
             button_text = f"{flag} {code} - {name}{status}"
             keyboard.append([InlineKeyboardButton(button_text, callback_data=f"set_currency_{code}")])
         
-        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="settings")])
+        keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="settings")])
         
         await query.edit_message_text(
             text=text,
@@ -328,8 +389,8 @@ async def show_currency_settings(query, context):
     except Exception as e:
         logger.error(f"Error in show_currency_settings: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка при завантаженні налаштувань валюти",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="settings")]])
+            "❌ Не вдалося завантажити налаштування валюти",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="settings")]])
         )
 
 async def set_currency(query, context, currency_code):
@@ -354,9 +415,9 @@ async def set_currency(query, context, currency_code):
         flag, name = currencies_map.get(currency_code, ('💱', currency_code))
         
         text = (
-            f"✅ **Валюта змінена**\n\n"
-            f"Тепер основна валюта: {flag} **{currency_code}** ({name})\n\n"
-            f"Всі суми будуть відображатися у {currency_code}."
+            f"✅ **Валюту змінено**\n\n"
+            f"Тепер основна валюта: {flag} **{currency_code}**\n\n"
+            f"Всі суми відображатимуться у {currency_code}"
         )
         
         keyboard = [
@@ -365,7 +426,7 @@ async def set_currency(query, context, currency_code):
                 InlineKeyboardButton("⚙️ Налаштування", callback_data="settings")
             ],
             [
-                InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
             ]
         ]
         
@@ -378,8 +439,8 @@ async def set_currency(query, context, currency_code):
     except Exception as e:
         logger.error(f"Error in set_currency: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка при зміні валюти",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="settings_currency")]])
+            "❌ Не вдалося змінити валюту",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="settings_currency")]])
         )
 
 # ==================== ЕКСПОРТ ДАНИХ ====================
@@ -398,17 +459,14 @@ async def show_export_menu(query, context):
         
         text = (
             f"📤 **Експорт даних**\n\n"
-            f"У вас є **{transactions_count}** транзакцій для експорту.\n\n"
-            "Доступні формати:\n"
-            "📊 *CSV* — таблиця для Excel/Google Sheets\n\n"
-            "📋 *Що включається в експорт:*\n"
-            "• Дата та час транзакції\n"
-            "• Тип (дохід/витрата)\n"
-            "• Сума та валюта\n"
-            "• Категорія\n"
-            "• Опис\n"
-            "• Джерело (ручне/імпорт)\n\n"
-            "💡 *Підказка:* Файл буде надісланий у цей чат"
+            f"Доступно **{transactions_count}** транзакцій\n\n"
+            "📊 *Формат CSV* — таблиця для Excel\n\n"
+            "📋 *Що експортується:*\n"
+            "• Дата та час\n"
+            "• Тип та сума\n"
+            "• Категорія та опис\n"
+            "• Джерело транзакції\n\n"
+            "💡 *Файл надійде у цей чат*"
         )
         
         keyboard = [
@@ -416,12 +474,12 @@ async def show_export_menu(query, context):
                 InlineKeyboardButton("📊 Завантажити CSV", callback_data="export_csv"),
             ],
             [
-                InlineKeyboardButton("🔙 Назад", callback_data="settings")
+                InlineKeyboardButton("◀️ Налаштування", callback_data="settings")
             ]
         ]
         
         if transactions_count == 0:
-            keyboard[0] = [InlineKeyboardButton("📊 Немає даних для експорту", callback_data="no_data")]
+            keyboard[0] = [InlineKeyboardButton("� Немає даних", callback_data="no_data")]
         
         await query.edit_message_text(
             text=text,
@@ -432,8 +490,8 @@ async def show_export_menu(query, context):
     except Exception as e:
         logger.error(f"Error in show_export_menu: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка при завантаженні експорту",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="settings")]])
+            "❌ Не вдалося підготувати експорт",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="settings")]])
         )
 
 async def export_csv(query, context):
@@ -452,8 +510,8 @@ async def export_csv(query, context):
         
         if not transactions:
             await query.edit_message_text(
-                "📭 **Немає даних для експорту**\n\nУ вас поки що немає транзакцій.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="settings_export")]])
+                "📭 **Немає даних**\n\nПоки що транзакції відсутні",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="settings_export")]])
             )
             return
         
@@ -511,12 +569,12 @@ async def export_csv(query, context):
                 InlineKeyboardButton("⚙️ Налаштування", callback_data="settings")
             ],
             [
-                InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
             ]
         ]
         
         await query.edit_message_text(
-            f"✅ **Файл надіслано!**\n\nВаші {len(transactions)} транзакцій успішно експортовано в CSV формат.",
+            f"✅ **Файл надіслано**\n\n{len(transactions)} транзакцій експортовано у CSV",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
@@ -524,8 +582,8 @@ async def export_csv(query, context):
     except Exception as e:
         logger.error(f"Error in export_csv: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка при експорті даних",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="settings_export")]])
+            "❌ Не вдалося експортувати дані",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="settings_export")]])
         )
 
 # ==================== ОЧИЩЕННЯ ДАНИХ ====================
@@ -544,17 +602,16 @@ async def show_clear_data_menu(query, context):
         
         text = (
             f"🗑️ **Очищення даних**\n\n"
-            f"⚠️ **УВАГА!** Ця дія незворотна!\n\n"
-            f"У вас є **{transactions_count}** транзакцій.\n\n"
-            "🗑️ *Що буде видалено:*\n"
-            "• Всі ваші транзакції (доходи та витрати)\n"
+            f"⚠️ **УВАГА! Дія незворотна**\n\n"
+            f"Транзакцій: **{transactions_count}**\n\n"
+            "🗑️ *Що видалиться:*\n"
+            "• Всі транзакції\n"
             "• Історія операцій\n"
             "• Статистика\n\n"
             "✅ *Що залишиться:*\n"
-            "• Ваші категорії\n"
-            "• Налаштування профілю\n"
-            "• Налаштування бота\n\n"
-            "💡 *Рекомендація:* Спочатку зробіть експорт даних!"
+            "• Категорії\n"
+            "• Налаштування\n\n"
+            "💡 *Спочатку зробіть експорт!*"
         )
         
         keyboard = [
@@ -565,12 +622,12 @@ async def show_clear_data_menu(query, context):
                 InlineKeyboardButton("🗑️ Видалити всі транзакції", callback_data="confirm_clear_data")
             ],
             [
-                InlineKeyboardButton("🔙 Назад", callback_data="settings")
+                InlineKeyboardButton("◀️ Назад", callback_data="settings")
             ]
         ]
         
         if transactions_count == 0:
-            keyboard[1] = [InlineKeyboardButton("📭 Немає даних для видалення", callback_data="no_data")]
+            keyboard[1] = [InlineKeyboardButton("📭 Немає даних", callback_data="no_data")]
         
         await query.edit_message_text(
             text=text,
@@ -581,8 +638,8 @@ async def show_clear_data_menu(query, context):
     except Exception as e:
         logger.error(f"Error in show_clear_data_menu: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка при завантаженні меню очищення",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="settings")]])
+            "❌ Не вдалося підготувати очищення",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="settings")]])
         )
 
 async def confirm_clear_data(query, context):
@@ -593,14 +650,14 @@ async def confirm_clear_data(query, context):
         transactions_count = len(transactions) if transactions else 0
         
         text = (
-            f"⚠️ **ОСТАТОЧНЕ ПІДТВЕРДЖЕННЯ**\n\n"
-            f"Ви дійсно хочете видалити **{transactions_count}** транзакцій?\n\n"
-            "❗ **ЦЯ ДІЯ НЕЗВОРОТНА!**\n\n"
-            "Після видалення ви втратите:\n"
+            f"⚠️ **ОСТАННЄ ПІДТВЕРДЖЕННЯ**\n\n"
+            f"Видалити **{transactions_count}** транзакцій?\n\n"
+            "❗ **ДІЯ НЕЗВОРОТНА**\n\n"
+            "Ви втратите:\n"
             "• Всю історію транзакцій\n"
-            "• Всю статистику\n"
-            "• Можливість аналізу минулих періодів\n\n"
-            "💭 *Подумайте двічі перед підтвердженням*"
+            "• Статистику та аналітику\n"
+            "• Можливість аналізу періодів\n\n"
+            "💭 *Подумайте двічі*"
         )
         
         keyboard = [
@@ -621,8 +678,8 @@ async def confirm_clear_data(query, context):
     except Exception as e:
         logger.error(f"Error in confirm_clear_data: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка при підтвердженні",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="settings_clear_data")]])
+            "❌ Не вдалося підтвердити дію",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="settings_clear_data")]])
         )
 
 async def clear_data_confirmed(query, context):
@@ -644,9 +701,9 @@ async def clear_data_confirmed(query, context):
         
         text = (
             f"✅ **Дані очищено**\n\n"
-            f"Видалено **{deleted_count}** транзакцій.\n\n"
-            "🎯 Тепер ви можете почати з чистого аркуша!\n\n"
-            "💡 *Підказка:* Додайте першу транзакцію, щоб почати новий облік фінансів."
+            f"Видалено: **{deleted_count}** транзакцій\n\n"
+            "🎯 Тепер можна почати заново!\n\n"
+            "💡 *Додайте першу транзакцію*"
         )
         
         keyboard = [
@@ -655,7 +712,7 @@ async def clear_data_confirmed(query, context):
                 InlineKeyboardButton("⚙️ Налаштування", callback_data="settings")
             ],
             [
-                InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
             ]
         ]
         
@@ -668,8 +725,8 @@ async def clear_data_confirmed(query, context):
     except Exception as e:
         logger.error(f"Error in clear_data_confirmed: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка при очищенні даних",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="settings_clear_data")]])
+            "❌ Не вдалося очистити дані",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="settings_clear_data")]])
         )
 
 # ==================== ДОПОМІЖНІ ФУНКЦІЇ ====================
@@ -686,8 +743,9 @@ async def create_category(query, context, category_type, category_name):
         existing_categories = get_user_categories(user.id, category_type)
         if any(cat.name.lower() == category_name.lower() for cat in existing_categories):
             await query.edit_message_text(
-                f"❌ Категорія '{category_name}' вже існує!",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="add_category")]])
+                f"❌ Категорія **{category_name}** вже існує",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="add_category")]]),
+                parse_mode="Markdown"
             )
             return
         
@@ -707,10 +765,9 @@ async def create_category(query, context, category_type, category_name):
         type_text = "витрат" if category_type == TransactionType.EXPENSE else "доходів"
         
         text = (
-            f"✅ **Категорія створена**\n\n"
-            f"Нова категорія {type_text}:\n"
-            f"**{category_name}**\n\n"
-            f"Тепер ви можете використовувати її для класифікації транзакцій."
+            f"✅ **Категорію створено**\n\n"
+            f"Нова категорія {type_text}: **{category_name}**\n\n"
+            f"Тепер можна використовувати її у транзакціях"
         )
         
         keyboard = [
@@ -720,7 +777,7 @@ async def create_category(query, context, category_type, category_name):
             ],
             [
                 InlineKeyboardButton("💳 Додати транзакцію", callback_data="add_transaction"),
-                InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
             ]
         ]
         
@@ -733,14 +790,20 @@ async def create_category(query, context, category_type, category_name):
     except Exception as e:
         logger.error(f"Error in create_category: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка при створенні категорії",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="add_category")]])
+            "❌ Не вдалося створити категорію",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="add_category")]])
         )
 
 # ==================== ОБРОБКА СТАНУ ВВОДУ ====================
 
 async def handle_category_name_input(update, context):
-    """Обробляє введення назви нової категорії"""
+    """Обробляє введення назви нової категорії або перейменування"""
+    # Перевіряємо, чи це перейменування категорії
+    if 'renaming_category' in context.user_data:
+        await handle_category_rename_input(update, context)
+        return
+    
+    # Обробляємо створення нової категорії
     if 'adding_category' not in context.user_data:
         return
     
@@ -749,13 +812,13 @@ async def handle_category_name_input(update, context):
     
     if len(category_name) < 2:
         await update.message.reply_text(
-            "❌ Назва категорії повинна містити принаймні 2 символи. Спробуйте ще раз:"
+            "❌ Назва занадто коротка (мінімум 2 символи). Спробуйте ще раз:"
         )
         return
     
     if len(category_name) > 50:
         await update.message.reply_text(
-            "❌ Назва категорії занадто довга (максимум 50 символів). Спробуйте ще раз:"
+            "❌ Назва занадто довга (максимум 50 символів). Спробуйте ще раз:"
         )
         return
     
@@ -791,12 +854,11 @@ async def handle_add_category_type(query, context, category_type):
         context.user_data['adding_category'] = transaction_type
         
         text = (
-            f"➕ **Додавання категорії {type_text}**\n\n"
-            f"Введіть назву нової категорії {type_text}:\n\n"
-            "📝 *Вимоги до назви:*\n"
-            "• Від 2 до 50 символів\n"
-            "• Унікальна назва\n"
-            "• Без спеціальних символів\n\n"
+            f"➕ **Створення категорії {type_text}**\n\n"
+            f"Введіть назву категорії {type_text}:\n\n"
+            "📝 *Вимоги:*\n"
+            "• 2-50 символів\n"
+            "• Унікальна назва\n\n"
             "💡 *Приклади:*\n"
         )
         
@@ -818,57 +880,120 @@ async def handle_add_category_type(query, context, category_type):
     except Exception as e:
         logger.error(f"Error in handle_add_category_type: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка при додаванні категорії",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="add_category")]])
+            "❌ Не вдалося додати категорію",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="add_category")]])
         )
 
 async def show_all_categories(query, context):
-    """Показує всі категорії користувача"""
+    """Показує всі категорії користувача з пагінацією"""
     try:
         user = get_user(query.from_user.id)
         if not user:
             await query.edit_message_text("❌ Користувач не знайдений")
             return
         
+        # Ініціалізуємо або отримуємо параметри перегляду категорій
+        if 'categories_view' not in context.user_data:
+            context.user_data['categories_view'] = {
+                'page': 1,
+                'per_page': 8,  # 8 категорій на сторінку (по 4 для доходів і витрат)
+                'show_type': 'all'  # 'all', 'income', 'expense'
+            }
+        
+        view_params = context.user_data['categories_view']
+        page = view_params.get('page', 1)
+        per_page = view_params.get('per_page', 8)
+        show_type = view_params.get('show_type', 'all')
+        
         # Отримуємо всі категорії
-        expense_categories = get_user_categories(user.id, TransactionType.EXPENSE)
-        income_categories = get_user_categories(user.id, TransactionType.INCOME)
+        expense_categories = get_user_categories(user.id, TransactionType.EXPENSE.value)
+        income_categories = get_user_categories(user.id, TransactionType.INCOME.value)
         
-        text = "📋 **Всі категорії**\n\n"
+        # Фільтруємо категорії за типом
+        if show_type == 'expense':
+            all_categories = [('expense', cat) for cat in expense_categories]
+        elif show_type == 'income':
+            all_categories = [('income', cat) for cat in income_categories]
+        else:  # show_type == 'all'
+            all_categories = []
+            # Спочатку додаємо витрати, потім доходи
+            all_categories.extend([('expense', cat) for cat in expense_categories])
+            all_categories.extend([('income', cat) for cat in income_categories])
         
-        # Категорії витрат
-        if expense_categories:
-            text += "💸 **Категорії витрат:**\n"
-            for i, cat in enumerate(expense_categories, 1):
-                icon = getattr(cat, 'icon', '💸')
-                status = " 🔧" if cat.is_default else ""
-                text += f"{i}. {icon} {cat.name}{status}\n"
-        else:
-            text += "💸 **Категорії витрат:** відсутні\n"
+        total_categories = len(all_categories)
         
-        text += "\n"
-        
-        # Категорії доходів
-        if income_categories:
-            text += "💰 **Категорії доходів:**\n"
-            for i, cat in enumerate(income_categories, 1):
-                icon = getattr(cat, 'icon', '💰')
-                status = " 🔧" if cat.is_default else ""
-                text += f"{i}. {icon} {cat.name}{status}\n"
-        else:
-            text += "💰 **Категорії доходів:** відсутні\n"
-        
-        text += "\n🔧 - системні категорії (неможливо видалити)"
-        
-        keyboard = [
-            [
-                InlineKeyboardButton("➕ Додати категорію", callback_data="add_category"),
-                InlineKeyboardButton("🗑️ Видалити", callback_data="delete_category_select")
-            ],
-            [
-                InlineKeyboardButton("🔙 Назад", callback_data="settings_categories")
+        if total_categories == 0:
+            text = "📋 **Всі категорії**\n\n📭 У вас немає категорій.\nСтворіть першу категорію!"
+            keyboard = [
+                [InlineKeyboardButton("➕ Створити категорію", callback_data="add_category")],
+                [InlineKeyboardButton("◀️ Назад", callback_data="settings_categories")]
             ]
-        ]
+        else:
+            # Розраховуємо пагінацію
+            total_pages = max(1, (total_categories + per_page - 1) // per_page)
+            start_idx = (page - 1) * per_page
+            end_idx = min(start_idx + per_page, total_categories)
+            
+            # Формуємо заголовок
+            type_filter_text = ""
+            if show_type == 'expense':
+                type_filter_text = " (Витрати)"
+            elif show_type == 'income':
+                type_filter_text = " (Доходи)"
+            
+            text = f"📋 **Всі категорії{type_filter_text}**\n"
+            text += f"📄 Сторінка {page} з {total_pages} | Всього: {total_categories}\n\n"
+            text += "💡 *Натисніть на категорію для редагування або видалення*\n\n"
+            
+            keyboard = []
+            
+            # Групуємо категорії для відображення
+            current_categories = all_categories[start_idx:end_idx]
+            current_section = None
+            
+            for cat_type, cat in current_categories:
+                # Додаємо заголовок секції, якщо змінився тип
+                if show_type == 'all' and current_section != cat_type:
+                    current_section = cat_type
+                    if cat_type == 'expense':
+                        keyboard.append([InlineKeyboardButton("💸 ── ВИТРАТИ ──", callback_data="noop_header")])
+                    else:
+                        keyboard.append([InlineKeyboardButton("💰 ── ДОХОДИ ──", callback_data="noop_header")])
+                
+                # Додаємо кнопку категорії
+                icon = getattr(cat, 'icon', '💸' if cat_type == 'expense' else '💰')
+                status = " 🔧" if getattr(cat, 'is_default', False) else ""
+                button_text = f"{icon} {cat.name}{status}"
+                keyboard.append([InlineKeyboardButton(button_text, callback_data=f"edit_category_{cat.id}")])
+            
+            # Додаємо кнопки фільтрів
+            filter_row = []
+            if show_type != 'expense':
+                filter_row.append(InlineKeyboardButton("� Витрати", callback_data="categories_filter_expense"))
+            if show_type != 'income':
+                filter_row.append(InlineKeyboardButton("💰 Доходи", callback_data="categories_filter_income"))
+            if show_type != 'all':
+                filter_row.append(InlineKeyboardButton("📋 Всі", callback_data="categories_filter_all"))
+            
+            if filter_row:
+                keyboard.append(filter_row)
+            
+            # Додаємо кнопки пагінації, якщо потрібно
+            pagination_row = []
+            if page > 1:
+                pagination_row.append(InlineKeyboardButton("◀️ Попередня", callback_data="categories_prev_page"))
+            if page < total_pages:
+                pagination_row.append(InlineKeyboardButton("Наступна ▶️", callback_data="categories_next_page"))
+                
+            if pagination_row:
+                keyboard.append(pagination_row)
+            
+            # Додаємо функціональні кнопки
+            keyboard.append([InlineKeyboardButton("➕ Нова категорія", callback_data="add_category")])
+            keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="settings_categories")])
+            
+            if show_type == 'all':
+                text += "🔧 — системні категорії (захищені від видалення)"
         
         await query.edit_message_text(
             text=text,
@@ -879,6 +1004,280 @@ async def show_all_categories(query, context):
     except Exception as e:
         logger.error(f"Error in show_all_categories: {str(e)}")
         await query.edit_message_text(
-            "❌ Помилка при завантаженні категорій",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="settings_categories")]])
+            "❌ Не вдалося завантажити категорії",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="settings_categories")]])
         )
+
+async def show_category_edit_menu(query, context, category_id):
+    """Показує меню редагування конкретної категорії"""
+    try:
+        session = Session()
+        category = session.query(Category).filter(Category.id == category_id).first()
+        
+        if not category:
+            await query.edit_message_text("❌ Категорія не знайдена")
+            session.close()
+            return
+        
+        # Перевіряємо, чи це категорія користувача
+        user = get_user(query.from_user.id)
+        if not user or category.user_id != user.id:
+            await query.edit_message_text("❌ Немає доступу до цієї категорії")
+            session.close()
+            return
+        
+        icon = getattr(category, 'icon', '🏷️')
+        type_emoji = "💸" if category.type == TransactionType.EXPENSE else "💰"
+        type_text = "витрат" if category.type == TransactionType.EXPENSE else "доходів"
+        
+        # Підраховуємо кількість транзакцій з цією категорією
+        transactions_count = session.query(Transaction).filter(Transaction.category_id == category_id).count()
+        
+        text = (
+            f"✏️ **Редагування категорії**\n\n"
+            f"{type_emoji} **{icon} {category.name}**\n"
+            f"Тип: {type_text}\n"
+            f"Транзакцій: {transactions_count}\n"
+        )
+        
+        if category.is_default:
+            text += "\n🔧 *Системна категорія* — захищена від видалення"
+        
+        keyboard = []
+        
+        # Додаємо кнопки редагування тільки для користувацьких категорій
+        if not category.is_default:
+            keyboard.extend([
+                [InlineKeyboardButton("✏️ Змінити назву", callback_data=f"rename_category_{category_id}")],
+                [InlineKeyboardButton("🗑️ Видалити категорію", callback_data=f"confirm_delete_cat_{category_id}")]
+            ])
+        else:
+            keyboard.append([InlineKeyboardButton("ℹ️ Системну категорію не можна змінювати", callback_data="noop_header")])
+        
+        keyboard.append([InlineKeyboardButton("◀️ До категорій", callback_data="settings_categories")])
+        
+        await query.edit_message_text(
+            text=text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+        
+        session.close()
+        
+    except Exception as e:
+        logger.error(f"Error in show_category_edit_menu: {str(e)}")
+        await query.edit_message_text(
+            "❌ Не вдалося завантажити категорію",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ До категорій", callback_data="settings_categories")]])
+        )
+
+async def show_rename_category_form(query, context, category_id):
+    """Показує форму для перейменування категорії"""
+    try:
+        session = Session()
+        category = session.query(Category).filter(Category.id == category_id).first()
+        
+        if not category or category.is_default:
+            await query.edit_message_text("❌ Категорію неможливо перейменувати")
+            session.close()
+            return
+        
+        # Зберігаємо ID категорії для перейменування
+        context.user_data['renaming_category'] = category_id
+        
+        icon = getattr(category, 'icon', '🏷️')
+        
+        text = (
+            f"✏️ **Перейменування категорії**\n\n"
+            f"Поточна назва: **{icon} {category.name}**\n\n"
+            f"Введіть нову назву категорії:\n\n"
+            f"📝 *Вимоги:*\n"
+            f"• 2-50 символів\n"
+            f"• Унікальна назва\n\n"
+            f"💡 *Надішліть повідомлення з новою назвою*"
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton("❌ Скасувати", callback_data=f"edit_category_{category_id}")]
+        ]
+        
+        await query.edit_message_text(
+            text=text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+        
+        session.close()
+        
+    except Exception as e:
+        logger.error(f"Error in show_rename_category_form: {str(e)}")
+        await query.edit_message_text(
+            "❌ Не вдалося відкрити форму перейменування",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ До категорій", callback_data="settings_categories")]])
+        )
+
+async def handle_category_rename_input(update, context):
+    """Обробляє введення нової назви категорії"""
+    if 'renaming_category' not in context.user_data:
+        return
+    
+    category_id = context.user_data['renaming_category']
+    new_name = update.message.text.strip()
+    
+    if len(new_name) < 2:
+        await update.message.reply_text(
+            "❌ Назва занадто коротка (мінімум 2 символи). Спробуйте ще раз:"
+        )
+        return
+    
+    if len(new_name) > 50:
+        await update.message.reply_text(
+            "❌ Назва занадто довга (максимум 50 символів). Спробуйте ще раз:"
+        )
+        return
+    
+    # Очищуємо стан
+    del context.user_data['renaming_category']
+    
+    # Створюємо fake query об'єкт для сумісності
+    class FakeQuery:
+        def __init__(self, user_id, chat_id):
+            self.from_user = type('obj', (object,), {'id': user_id})
+            self.message = type('obj', (object,), {'chat_id': chat_id})
+        
+        async def edit_message_text(self, text, reply_markup=None, parse_mode=None):
+            await context.bot.send_message(
+                chat_id=self.message.chat_id,
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode
+            )
+    
+    fake_query = FakeQuery(update.effective_user.id, update.effective_chat.id)
+    await rename_category(fake_query, context, category_id, new_name)
+
+async def rename_category(query, context, category_id, new_name):
+    """Перейменовує категорію"""
+    try:
+        user = get_user(query.from_user.id)
+        if not user:
+            await query.edit_message_text("❌ Користувач не знайдений")
+            return
+        
+        session = Session()
+        category = session.query(Category).filter(
+            Category.id == category_id,
+            Category.user_id == user.id
+        ).first()
+        
+        if not category:
+            await query.edit_message_text("❌ Категорія не знайдена")
+            session.close()
+            return
+        
+        if category.is_default:
+            await query.edit_message_text("❌ Системну категорію неможливо перейменувати")
+            session.close()
+            return
+        
+        # Перевіряємо, чи не існує категорія з такою назвою
+        existing_categories = get_user_categories(user.id, category.type)
+        if any(cat.name.lower() == new_name.lower() and cat.id != category_id for cat in existing_categories):
+            await query.edit_message_text(
+                f"❌ Категорія **{new_name}** вже існує",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data=f"edit_category_{category_id}")]]),
+                parse_mode="Markdown"
+            )
+            session.close()
+            return
+        
+        old_name = category.name
+        category.name = new_name
+        session.commit()
+        session.close()
+        
+        text = (
+            f"✅ **Категорію перейменовано**\n\n"
+            f"**{old_name}** → **{new_name}**\n\n"
+            f"Зміни застосовано до всіх транзакцій"
+        )
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("✏️ Редагувати ще", callback_data=f"edit_category_{category_id}"),
+                InlineKeyboardButton("🏷️ До категорій", callback_data="settings_categories")
+            ],
+            [
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
+            ]
+        ]
+        
+        await query.edit_message_text(
+            text=text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in rename_category: {str(e)}")
+        await query.edit_message_text(
+            "❌ Не вдалося перейменувати категорію",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ До категорій", callback_data="settings_categories")]])
+        )
+
+# ==================== ОБРОБНИКИ ПАГІНАЦІЇ ТА ФІЛЬТРІВ КАТЕГОРІЙ ====================
+
+async def handle_categories_pagination(query, context, direction):
+    """Обробка пагінації списку категорій"""
+    try:
+        # Ініціалізуємо параметри перегляду, якщо їх немає
+        if 'categories_view' not in context.user_data:
+            context.user_data['categories_view'] = {
+                'page': 1,
+                'per_page': 8,
+                'show_type': 'all'
+            }
+        
+        view_params = context.user_data['categories_view']
+        current_page = view_params.get('page', 1)
+        
+        # Розраховуємо нову сторінку
+        if direction == 'next':
+            view_params['page'] = current_page + 1
+        else:  # prev
+            view_params['page'] = max(1, current_page - 1)
+        
+        context.user_data['categories_view'] = view_params
+        
+        # Оновлюємо список категорій з новою сторінкою
+        await show_all_categories(query, context)
+        
+    except Exception as e:
+        logger.error(f"Error handling categories pagination: {str(e)}")
+        await query.answer("Помилка при пагінації списку категорій.")
+
+async def handle_categories_filter(query, context, filter_type):
+    """Обробка фільтрів категорій"""
+    try:
+        # Ініціалізуємо параметри перегляду, якщо їх немає
+        if 'categories_view' not in context.user_data:
+            context.user_data['categories_view'] = {
+                'page': 1,
+                'per_page': 8,
+                'show_type': 'all'
+            }
+        
+        view_params = context.user_data['categories_view']
+        
+        # Встановлюємо новий фільтр
+        view_params['show_type'] = filter_type
+        view_params['page'] = 1  # Скидаємо на першу сторінку при зміні фільтра
+        
+        context.user_data['categories_view'] = view_params
+        
+        # Оновлюємо список категорій з новим фільтром
+        await show_all_categories(query, context)
+        
+    except Exception as e:
+        logger.error(f"Error handling categories filter: {str(e)}")
+        await query.answer("Помилка при фільтрації категорій.")

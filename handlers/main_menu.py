@@ -37,7 +37,7 @@ async def show_main_menu(message_or_query, context, is_query=None):
     """
     try:
         keyboard = create_main_menu_keyboard()
-        text = "🏠 **Головне меню FinAssist**\n\nОберіть дію:"
+        text = "◀️ **Головне меню FinAssist**\n\nОберіть дію:"
         
         # Автоматично визначаємо тип об'єкта
         if is_query is None:
@@ -61,7 +61,7 @@ async def show_main_menu(message_or_query, context, is_query=None):
     except Exception as e:
         logger.error(f"Error in show_main_menu: {str(e)}")
         # Fallback до простого повідомлення
-        fallback_text = "🏠 Головне меню\n\nВикористовуйте команди: /add, /budget, /analytics, /settings"
+        fallback_text = "◀️ Головне меню\n\nВикористовуйте команди: /add, /budget, /analytics, /settings"
         
         if is_query or hasattr(message_or_query, 'edit_message_text'):
             try:

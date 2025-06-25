@@ -19,7 +19,7 @@ async def create_budget_from_recommendations(query, context):
             "Не знайдено рекомендацій для створення бюджету. Будь ласка, спочатку отримайте рекомендації.",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("📊 Рекомендації по бюджету", callback_data="budget_recommendations")],
-                [InlineKeyboardButton("🔙 Назад", callback_data="budget")]
+                [InlineKeyboardButton("◀️ Назад", callback_data="budget")]
             ]),
             parse_mode="Markdown"
         )
@@ -80,7 +80,7 @@ async def create_budget_from_recommendations(query, context):
             f"❌ *Не вдалося створити бюджет*\n\n"
             f"Помилка: {str(e)}",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Назад", callback_data="budget")]
+                [InlineKeyboardButton("◀️ Назад", callback_data="budget")]
             ]),
             parse_mode="Markdown"
         )
@@ -104,7 +104,7 @@ async def show_budget_total_input(query, context):
         "запропонує оптимальний бюджет.",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("📊 Рекомендації по бюджету", callback_data="budget_recommendations")],
-            [InlineKeyboardButton("🔙 Назад до бюджетів", callback_data="budget")]
+            [InlineKeyboardButton("◀️ Назад до бюджетів", callback_data="budget")]
         ]),
         parse_mode="Markdown"
     )
@@ -139,7 +139,7 @@ async def show_my_budget_overview(query, context):
             "❌ *Помилка*\n\n"
             "Не вдалося отримати фінансову інформацію.",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")]
+                [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
             ]),
             parse_mode="Markdown"
         )
@@ -247,7 +247,7 @@ async def show_my_budget_overview(query, context):
             InlineKeyboardButton("➕ Додати операцію", callback_data="add_transaction")
         ],
         [
-            InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")
+            InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -315,7 +315,7 @@ async def show_budget_detailed_view(query, context):
         [InlineKeyboardButton("⚙️ Редагувати категорії", callback_data="budget_edit_categories")],
         [InlineKeyboardButton("📊 Експорт даних", callback_data="budget_export"),
          InlineKeyboardButton("📈 Метрики", callback_data="budget_metrics")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="my_budget_overview")]
+        [InlineKeyboardButton("◀️ Назад", callback_data="my_budget_overview")]
     ]
     
     await query.edit_message_text(
@@ -346,7 +346,7 @@ async def show_budget_settings(query, context):
         [InlineKeyboardButton("🏷️ Налаштувати категорії", callback_data="budget_setup_categories")],
         [InlineKeyboardButton("📅 Встановити денний ліміт", callback_data="budget_set_daily_limit")],
         [InlineKeyboardButton("🎯 Створити розумний бюджет", callback_data="budget_create_smart")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="my_budget_overview")]
+        [InlineKeyboardButton("◀️ Назад", callback_data="my_budget_overview")]
     ]
     
     await query.edit_message_text(
@@ -399,7 +399,7 @@ async def show_budget_statistics(query, context):
     keyboard = [
         [InlineKeyboardButton("📈 Детальна аналітика", callback_data="budget_detailed_analytics")],
         [InlineKeyboardButton("📊 Експорт звіту", callback_data="budget_export_report")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="my_budget_overview")]
+        [InlineKeyboardButton("◀️ Назад", callback_data="my_budget_overview")]
     ]
     
     await query.edit_message_text(
@@ -453,7 +453,7 @@ async def execute_budget_reset(query, context):
         keyboard = [
             [InlineKeyboardButton("💰 Встановити новий бюджет", callback_data="budget_change_total")],
             [InlineKeyboardButton("🎯 Створити розумний бюджет", callback_data="budget_create_smart")],
-            [InlineKeyboardButton("🔙 До головного меню", callback_data="main_menu")]
+            [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
         ]
     else:
         message = "❌ *Помилка*\n\n"
@@ -461,7 +461,7 @@ async def execute_budget_reset(query, context):
         
         keyboard = [
             [InlineKeyboardButton("🔄 Спробувати ще раз", callback_data="budget_reset_confirm")],
-            [InlineKeyboardButton("🔙 Назад", callback_data="my_budget_overview")]
+            [InlineKeyboardButton("◀️ Назад", callback_data="my_budget_overview")]
         ]
     
     await query.edit_message_text(
@@ -489,7 +489,7 @@ async def show_expense_pie_chart(query, context):
                 "📊 Немає даних для створення діаграми витрат\n\n" +
                 "💡 *Почніть додавати витрати, щоб побачити розподіл по категоріях*",
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🔙 До огляду", callback_data="my_budget_overview")
+                    InlineKeyboardButton("◀️ До огляду", callback_data="my_budget_overview")
                 ]]),
                 parse_mode="Markdown"
             )
@@ -508,7 +508,7 @@ async def show_expense_pie_chart(query, context):
                     InlineKeyboardButton("💰 Доходи", callback_data="show_income_pie_chart")
                 ],
                 [
-                    InlineKeyboardButton("🔙 До огляду", callback_data="my_budget_overview")
+                    InlineKeyboardButton("◀️ До огляду", callback_data="my_budget_overview")
                 ]
             ])
         )
@@ -519,7 +519,7 @@ async def show_expense_pie_chart(query, context):
             "❌ Помилка створення діаграми\n\n" +
             "Спробуйте пізніше або зверніться до підтримки.",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 До огляду", callback_data="my_budget_overview")
+                InlineKeyboardButton("◀️ До огляду", callback_data="my_budget_overview")
             ]]),
             parse_mode="Markdown"
         )
@@ -540,7 +540,7 @@ async def show_income_pie_chart(query, context):
                 "📊 Немає даних для створення діаграми доходів\n\n" +
                 "💡 *Почніть додавати доходи, щоб побачити розподіл по джерелах*",
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🔙 До огляду", callback_data="my_budget_overview")
+                    InlineKeyboardButton("◀️ До огляду", callback_data="my_budget_overview")
                 ]]),
                 parse_mode="Markdown"
             )
@@ -559,7 +559,7 @@ async def show_income_pie_chart(query, context):
                     InlineKeyboardButton("📊 Витрати", callback_data="show_expense_pie_chart")
                 ],
                 [
-                    InlineKeyboardButton("🔙 До огляду", callback_data="my_budget_overview")
+                    InlineKeyboardButton("◀️ До огляду", callback_data="my_budget_overview")
                 ]
             ])
         )
@@ -569,7 +569,7 @@ async def show_income_pie_chart(query, context):
         await query.edit_message_text(
             "❌ Помилка створення діаграми доходів",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 До огляду", callback_data="my_budget_overview")
+                InlineKeyboardButton("◀️ До огляду", callback_data="my_budget_overview")
             ]]),
             parse_mode="Markdown"
         )

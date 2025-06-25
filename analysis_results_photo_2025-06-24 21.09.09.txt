@@ -1,0 +1,82 @@
+=== Аналіз чека: photo_2025-06-24 21.09.09.jpeg ===
+
+--- Стандартний OCR ---
+АВРІЯ
+ТОРГОВЕЛЬНИЙ
+
+ЦЕНТРУКАФЕЯ
+УКРАЇНА,
+
+З и
+ВУЛ.ЛАЗУРНА,17
+NH 319294915438
+
+КАСИР: LANE2
+
+ШТРИХКОД
+ВОДА МОРШИНСЬКА 0,7
+5 Л Б/ГАЗ. СПОРТ
+
+IAEHT. Е 6545318
+ТЕРМІНАЛ 50118970
+ОПЛАТА
+
+ЕПЗ 535560ХХХХХХ2210
+ПЛАТІЖНА СИСТЕМА под
+КОД АВТ.
+
+RRN 516911038005
+БЕЗГОТІВКОВА 28,50 ГРН
+ЗАСІБ ОПЛАТИ 0 КАРТКА
+НОПЛАТА
+
+NAB_A = 20,00%
+
+ДО СПЛАТ
+
+ЯМ КАСИ: 142 чек N44
+#KACA САМООБСЛ-ННЯ М2 _
+#15096970
+
+ЧЕК Ie Shays cee
+18.06. 202 -52-32
+
+
+
+--- OCR з налаштуваннями для цифр ---
+: ae NPABATHENIANPHENCTBOTABEIA
+Го ча З ТОРГОВИЙ КОМПЛЕКСТОРГОВЕЛЬНИЙ
+зоре NEHTP+KADE*TABPIAB*
+* teres YKPATHA,MMKONALBCbKAOB/.,M.
+Чо ee MUKONATB3ABOACLKMKP-H,
+ease BYJ).JA3YPHA,17
+ike) NH3192949154338
+б ох. KACMP:LANE2
+wTPUxkog 4820017000574 2
+ae без BOAAMOPWIMHCEKA0,7 23,50a
+Paees5(NB/TA3.CnopT
+IAEHT.EKBAMPA 6545318
+See8TEPMIHAN 50118970
+ОПЛАТА
+Ens 535560ХХХХХХ2210
+MMIATIXHACUCTEMA MASTERCARD
+KOAABT. 351908
+RRN 516911038665
+BESPOTIBKOBA 28,50ГРН
+3ACIBOMATU -KAPTKA
+ЯОПЛАТА ДО
+СУМА дон :
+NABLA=20,00% eaes,92
+Ao-cnnatin , 23,50ГРИ :
+CGueidemsesaogSae
+HNKACH:-1424EKN440=
+HKACACAMOOBCN-HHAN2 Pale
+815096970 й СМ :
+YEKW2ExxH4scRV4 Pei,
+18.06.202511-52-32 РА
+. oie fi
+-Гах: бе Ome й
+(и mai У
+Пт
+БАМИ
+Би еко ЕТ j

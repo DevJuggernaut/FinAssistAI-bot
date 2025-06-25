@@ -22,7 +22,7 @@ async def show_help_menu(query, context):
                 InlineKeyboardButton("ℹ️ Про бота", callback_data="help_about")
             ],
             [
-                InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
             ]
         ]
         
@@ -46,7 +46,7 @@ async def show_help_menu(query, context):
         await query.edit_message_text(
             "❌ Помилка при завантаженні меню допомоги",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")]
+                [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
             ])
         )
 
@@ -75,7 +75,7 @@ async def show_faq_menu(query, context):
                 InlineKeyboardButton("📎 Які формати підтримуються?", callback_data="faq_file_formats")
             ],
             [
-                InlineKeyboardButton("🔙 Назад до допомоги", callback_data="help_menu")
+                InlineKeyboardButton("◀️ Назад до допомоги", callback_data="help_menu")
             ]
         ]
         
@@ -96,7 +96,7 @@ async def show_faq_menu(query, context):
         await query.edit_message_text(
             "❌ Помилка при завантаженні FAQ",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Назад", callback_data="help_menu")]
+                [InlineKeyboardButton("◀️ Назад", callback_data="help_menu")]
             ])
         )
 
@@ -118,7 +118,7 @@ async def show_faq_add_transaction(query, context):
     )
     
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад до FAQ", callback_data="help_faq")]
+        [InlineKeyboardButton("◀️ Назад до FAQ", callback_data="help_faq")]
     ]
     
     await query.edit_message_text(
@@ -143,7 +143,7 @@ async def show_faq_upload_statement(query, context):
     )
     
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад до FAQ", callback_data="help_faq")]
+        [InlineKeyboardButton("◀️ Назад до FAQ", callback_data="help_faq")]
     ]
     
     await query.edit_message_text(
@@ -169,7 +169,7 @@ async def show_faq_change_category(query, context):
     )
     
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад до FAQ", callback_data="help_faq")]
+        [InlineKeyboardButton("◀️ Назад до FAQ", callback_data="help_faq")]
     ]
     
     await query.edit_message_text(
@@ -195,7 +195,7 @@ async def show_faq_export_data(query, context):
     )
     
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад до FAQ", callback_data="help_faq")]
+        [InlineKeyboardButton("◀️ Назад до FAQ", callback_data="help_faq")]
     ]
     
     await query.edit_message_text(
@@ -223,7 +223,7 @@ async def show_faq_clear_data(query, context):
     )
     
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад до FAQ", callback_data="help_faq")]
+        [InlineKeyboardButton("◀️ Назад до FAQ", callback_data="help_faq")]
     ]
     
     await query.edit_message_text(
@@ -255,7 +255,7 @@ async def show_faq_file_formats(query, context):
     )
     
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад до FAQ", callback_data="help_faq")]
+        [InlineKeyboardButton("◀️ Назад до FAQ", callback_data="help_faq")]
     ]
     
     await query.edit_message_text(
@@ -294,7 +294,7 @@ async def show_contacts(query, context):
                 InlineKeyboardButton("💬 Telegram", url="https://t.me/finassist_support")
             ],
             [
-                InlineKeyboardButton("🔙 Назад до допомоги", callback_data="help_menu")
+                InlineKeyboardButton("◀️ Назад до допомоги", callback_data="help_menu")
             ]
         ]
         
@@ -309,7 +309,7 @@ async def show_contacts(query, context):
         await query.edit_message_text(
             "❌ Помилка при завантаженні контактів",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Назад", callback_data="help_menu")]
+                [InlineKeyboardButton("◀️ Назад", callback_data="help_menu")]
             ])
         )
 
@@ -351,7 +351,7 @@ async def show_about_bot(query, context):
                 InlineKeyboardButton("🛡️ Конфіденційність", callback_data="about_privacy")
             ],
             [
-                InlineKeyboardButton("🔙 Назад до допомоги", callback_data="help_menu")
+                InlineKeyboardButton("◀️ Назад до допомоги", callback_data="help_menu")
             ]
         ]
         
@@ -366,7 +366,7 @@ async def show_about_bot(query, context):
         await query.edit_message_text(
             "❌ Помилка при завантаженні інформації",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Назад", callback_data="help_menu")]
+                [InlineKeyboardButton("◀️ Назад", callback_data="help_menu")]
             ])
         )
 
@@ -396,7 +396,7 @@ async def show_changelog(query, context):
     )
     
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад до \"Про бота\"", callback_data="help_about")]
+        [InlineKeyboardButton("◀️ Назад до \"Про бота\"", callback_data="help_about")]
     ]
     
     await query.edit_message_text(
@@ -430,7 +430,7 @@ async def show_privacy_policy(query, context):
     )
     
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад до \"Про бота\"", callback_data="help_about")]
+        [InlineKeyboardButton("◀️ Назад до \"Про бота\"", callback_data="help_about")]
     ]
     
     await query.edit_message_text(

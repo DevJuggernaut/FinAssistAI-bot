@@ -20,6 +20,7 @@ from services.openai_service import openai_service
 from services.analytics_service import analytics_service
 from services.mida_receipt_parser import mida_receipt_parser
 from services.free_receipt_parser import free_receipt_parser
+from services.tavria_receipt_parser import TavriaReceiptParser
 
 # Налаштування логування
 logger = logging.getLogger(__name__)
@@ -72,8 +73,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # Перевіряємо, чи користувач створює новий рахунок
         if context.user_data.get('awaiting_account_name'):
-            from handlers.accounts_handler import handle_account_name_input
-            handled = await handle_account_name_input(update.message, context)
+            from handlers.accounts_handler import handle_account_text_input
+            handled = await handle_account_text_input(update.message, context)
             if handled:
                 return
         
@@ -94,7 +95,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                     transaction_type=ttype
                 )
                 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-                keyboard = [[InlineKeyboardButton("🏠 Головне меню", callback_data="add_transaction")]]
+                keyboard = [[InlineKeyboardButton("◀️ Головне меню", callback_data="add_transaction")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text(
                     f"✅ Транзакцію додано!\nСума: {amount} грн",
@@ -106,7 +107,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 return
             except ValueError:
                 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-                keyboard = [[InlineKeyboardButton("🏠 Головне меню", callback_data="add_transaction")]]
+                keyboard = [[InlineKeyboardButton("◀️ Головне меню", callback_data="add_transaction")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text(
                     "❌ Введіть коректну суму (наприклад, 150.50)",
@@ -248,8 +249,15 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🔍 Розпізнаю чек...\nЦе може зайняти кілька секунд"
         )
         
-        # Спочатку пробуємо розпізнати як MIDA чек
-        receipt_data = mida_receipt_parser.parse_receipt(file_path)
+        # Створюємо екземпляр парсера для Таврія В
+        tavria_parser = TavriaReceiptParser()
+        
+        # Спочатку пробуємо розпізнати як чек Таврія В
+        receipt_data = tavria_parser.parse_receipt(file_path)
+        
+        # Якщо Таврія В парсер не впорався, пробуємо MIDA
+        if not receipt_data:
+            receipt_data = mida_receipt_parser.parse_receipt(file_path)
         
         # Якщо MIDA парсер не впорався, використовуємо загальний безкоштовний парсер
         if not receipt_data:
@@ -264,12 +272,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         
-        # Перевіряємо, чи це MIDA чек з категоризованими товарами
+        # Перевіряємо, чи це чек з категоризованими товарами (Таврія В або MIDA)
         if 'categorized_items' in receipt_data and receipt_data['categorized_items']:
-            await processing_message.edit_text("✅ Чек MIDA успішно розпізнано!")
+            store_name = receipt_data.get('store_name', 'Магазин')
+            await processing_message.edit_text(f"✅ Чек {store_name} успішно розпізнано!")
             
-            # Показуємо детальний результат для MIDA
-            await send_mida_receipt_summary(update, receipt_data, user)
+            # Показуємо детальний результат
+            if store_name == 'Таврія В':
+                await send_tavria_receipt_summary(update, receipt_data, user)
+            else:
+                await send_mida_receipt_summary(update, receipt_data, user)
         else:
             # Звичайна обробка для інших чеків
             try:
@@ -402,7 +414,7 @@ async def send_mida_receipt_summary(update: Update, receipt_data: Dict, user):
                 InlineKeyboardButton("📈 Аналітика витрат", callback_data="show_charts")
             ],
             [
-                InlineKeyboardButton("🏠 Головне меню", callback_data="main_menu")
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -415,6 +427,125 @@ async def send_mida_receipt_summary(update: Update, receipt_data: Dict, user):
     except Exception as e:
         logger.error(f"Error sending MIDA receipt summary: {str(e)}")
         await update.message.reply_text("❌ Помилка при формуванні звіту по чеку")
+
+async def send_tavria_receipt_summary(update: Update, receipt_data: Dict, user):
+    """Відправляє детальний звіт по чеку Таврія В з категоризованими товарами"""
+    try:
+        categorized_items = receipt_data.get('categorized_items', {})
+        
+        # Формуємо повідомлення
+        message_parts = [
+            "🛒 **Чек Таврія В розпізнано успішно!**\n",
+            f"💰 **Загальна сума:** {receipt_data['total_amount']:.2f} грн",
+            f"📅 **Дата:** {receipt_data.get('date', datetime.now()).strftime('%d.%m.%Y') if receipt_data.get('date') else 'сьогодні'}",
+            f"🧾 **Номер чека:** {receipt_data.get('receipt_number', 'N/A')}\n"
+        ]
+        
+        # Додаємо категорії товарів
+        total_saved = 0
+        category_emojis = {
+            'напої': '🥤',
+            'алкоголь': '🍺',
+            'молочні продукти': '🥛',
+            'крупи та каші': '🌾',
+            'кондитерські вироби': '🍰',
+            'снеки': '🍿',
+            'хліб та випічка': '🍞',
+            'продукти харчування': '🍽️',
+            'інше': '📦'
+        }
+        
+        for category, data in categorized_items.items():
+            if isinstance(data, dict) and 'items' in data:
+                items = data['items']
+                category_total = data['total_amount']
+                item_count = data['item_count']
+                
+                emoji = category_emojis.get(category, '📦')
+                message_parts.append(f"{emoji} **{category.title()}** ({item_count} поз.): {category_total:.2f} грн")
+                
+                # Додаємо список товарів (максимум 3 для економії місця)
+                for i, item in enumerate(items[:3]):
+                    message_parts.append(f"   • {item['name']}: {item['price']:.2f} грн")
+                
+                if len(items) > 3:
+                    message_parts.append(f"   • ... та ще {len(items) - 3} товарів")
+                
+                message_parts.append("")  # Порожній рядок для розділення
+                
+                # Знаходимо або створюємо категорію
+                user_categories = get_user_categories(user.id)
+                category_id = None
+                category_mapping = {
+                    'напої': ['напої', 'drinks', 'beverages'],
+                    'алкоголь': ['алкоголь', 'alcohol', 'спиртні напої'],
+                    'молочні продукти': ['молочні продукти', 'dairy', 'молоко'],
+                    'крупи та каші': ['крупи', 'cereals', 'каші', 'groceries'],
+                    'кондитерські вироби': ['солодощі', 'sweets', 'кондитерські'],
+                    'снеки': ['снеки', 'snacks', 'закуски'],
+                    'хліб та випічка': ['хліб', 'bread', 'випічка'],
+                    'продукти харчування': ['продукти', 'food', 'їжа', 'groceries'],
+                    'інше': ['інше', 'other', 'різне']
+                }
+                
+                # Шукаємо відповідну категорію користувача
+                possible_names = category_mapping.get(category, [category])
+                for cat in user_categories:
+                    if any(name.lower() in cat.name.lower() or cat.name.lower() in name.lower() 
+                           for name in possible_names):
+                        category_id = cat.id
+                        break
+                
+                # Якщо категорію не знайдено, використовуємо першу доступну
+                if not category_id and user_categories:
+                    category_id = user_categories[0].id
+                
+                # Додаємо транзакцію для кожної категорії
+                add_transaction(
+                    user_id=user.id,
+                    amount=category_total,
+                    description=f"Таврія В - {category} ({item_count} товарів)",
+                    category_id=category_id,
+                    transaction_type=TransactionType.EXPENSE,
+                    transaction_date=receipt_data.get('date', datetime.now()) if receipt_data.get('date') else datetime.now(),
+                    source='tavria_receipt'
+                )
+                total_saved += category_total
+        
+        # Додаємо підсумок
+        message_parts.append(f"✅ **Створено транзакцій на суму:** {total_saved:.2f} грн")
+        message_parts.append(f"📊 **Категорій:** {len(categorized_items)}")
+        message_parts.append(f"🏪 **Магазин:** Таврія В")
+        
+        # Відправляємо повідомлення
+        await update.message.reply_text(
+            "\n".join(message_parts),
+            parse_mode="Markdown"
+        )
+        
+        # Пропонуємо додаткові дії
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = [
+            [
+                InlineKeyboardButton("📊 Переглянути статистику", callback_data="show_stats"),
+                InlineKeyboardButton("📈 Аналітика витрат", callback_data="show_charts")
+            ],
+            [
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            "Що хочете зробити далі?",
+            reply_markup=reply_markup
+        )
+        
+    except Exception as e:
+        logger.error(f"Помилка при відправці звіту Таврія В: {str(e)}")
+        await update.message.reply_text(
+            "❌ Помилка при обробці чека. Спробуйте ще раз."
+        )
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обробка банківських виписок"""

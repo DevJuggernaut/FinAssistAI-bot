@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 async def show_help_menu(query, context):
     """Показує меню допомоги"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -34,7 +34,7 @@ async def show_help_menu(query, context):
 async def show_categories(query, context):
     """Показує категорії користувача"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -56,7 +56,7 @@ async def show_categories(query, context):
 async def show_reports_menu(query, context):
     """Показує меню звітів"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -78,7 +78,7 @@ async def show_reports_menu(query, context):
 async def show_charts_menu(query, context):
     """Показує меню графіків"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -100,7 +100,7 @@ async def show_charts_menu(query, context):
 async def generate_monthly_report(query, context):
     """Генерує місячний звіт"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -122,7 +122,7 @@ async def generate_monthly_report(query, context):
 async def export_transactions(query, context):
     """Експортує транзакції"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -144,7 +144,7 @@ async def export_transactions(query, context):
 async def show_setup_monthly_budget_form(query, context):
     """Показує форму налаштування місячного бюджету"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -166,7 +166,7 @@ async def show_setup_monthly_budget_form(query, context):
 async def show_setup_categories_form(query, context):
     """Показує форму налаштування категорій"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -188,7 +188,7 @@ async def show_setup_categories_form(query, context):
 async def show_budget_menu(query, context):
     """Показує меню бюджету"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -210,7 +210,7 @@ async def show_budget_menu(query, context):
 async def show_create_budget_form(query, context):
     """Показує форму створення бюджету"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -232,7 +232,7 @@ async def show_create_budget_form(query, context):
 async def show_budget_recommendations(query, context):
     """Показує рекомендації по бюджету"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -254,7 +254,7 @@ async def show_budget_recommendations(query, context):
 async def show_past_budgets(query, context):
     """Показує минулі бюджети"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -276,7 +276,7 @@ async def show_past_budgets(query, context):
 async def show_edit_budget_form(query, context):
     """Показує форму редагування бюджету"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -298,7 +298,7 @@ async def show_edit_budget_form(query, context):
 async def show_budget_analysis(query, context):
     """Показує аналіз бюджету"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -320,7 +320,7 @@ async def show_budget_analysis(query, context):
 async def show_financial_advice_menu(query, context):
     """Показує меню фінансових порад"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -342,7 +342,7 @@ async def show_financial_advice_menu(query, context):
 async def show_settings_menu(query, context):
     """Показує меню налаштувань"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -364,7 +364,7 @@ async def show_settings_menu(query, context):
 async def show_notification_settings(query, context):
     """Показує налаштування сповіщень"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -386,7 +386,7 @@ async def show_notification_settings(query, context):
 async def show_currency_settings(query, context):
     """Показує налаштування валюти"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -408,7 +408,7 @@ async def show_currency_settings(query, context):
 async def show_language_settings(query, context):
     """Показує налаштування мови"""
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     

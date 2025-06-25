@@ -73,7 +73,7 @@ async def start_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Лаконічне привітання з головним меню
         welcome_message = (
             f"👋 *З поверненням, {first_name}!*\n\n"
-            "🏠 *Головне меню FinAssist*\n\n"
+            "⚙️ *Головне меню FinAssist*\n\n"
             "Оберіть дію:"
         )
         

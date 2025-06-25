@@ -54,7 +54,8 @@ from handlers.settings_handler import (
     show_delete_category_select, confirm_delete_category, delete_category_confirmed,
     show_currency_settings as show_settings_currency, set_currency, show_export_menu,
     export_csv, show_clear_data_menu, confirm_clear_data, clear_data_confirmed,
-    handle_add_category_type, show_all_categories
+    handle_add_category_type, show_all_categories, show_category_edit_menu,
+    show_rename_category_form, rename_category
 )
 from handlers.help_handler import (
     show_help_menu, show_faq_menu, show_faq_add_transaction, show_faq_upload_statement,
@@ -135,9 +136,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif callback_data == "accounts_transfer":
             from handlers.accounts_handler import show_account_transfer
             await show_account_transfer(query, context)
-        elif callback_data == "accounts_stats":
-            from handlers.accounts_handler import show_accounts_stats
-            await show_accounts_stats(query, context)
         elif callback_data == "accounts_add_cash":
             from handlers.accounts_handler import create_cash_account
             await create_cash_account(query, context)
@@ -162,6 +160,40 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif callback_data == "accounts_use_default_name":
             from handlers.accounts_handler import use_default_account_name
             await use_default_account_name(query, context)
+        elif callback_data == "accounts_balance_zero":
+            from handlers.accounts_handler import set_zero_balance
+            await set_zero_balance(query, context)
+        elif callback_data == "accounts_balance_1000":
+            from handlers.accounts_handler import set_balance_1000
+            await set_balance_1000(query, context)
+        elif callback_data == "accounts_balance_5000":
+            from handlers.accounts_handler import set_balance_5000
+            await set_balance_5000(query, context)
+        elif callback_data == "accounts_balance_10000":
+            from handlers.accounts_handler import set_balance_10000
+            await set_balance_10000(query, context)
+        elif callback_data == "accounts_edit_name":
+            from handlers.accounts_handler import show_account_name_input
+            await show_account_name_input(query, context)
+        
+        # Обробка переказів між рахунками
+        elif callback_data.startswith("transfer_from_"):
+            from handlers.accounts_handler import show_transfer_destination
+            from_account_id = int(callback_data.split("_")[2])
+            await show_transfer_destination(query, context, from_account_id)
+        elif callback_data.startswith("transfer_to_"):
+            from handlers.accounts_handler import show_transfer_amount_input
+            parts = callback_data.split("_")
+            from_account_id = int(parts[2])
+            to_account_id = int(parts[3])
+            await show_transfer_amount_input(query, context, from_account_id, to_account_id)
+        elif callback_data.startswith("transfer_amount_"):
+            from handlers.accounts_handler import execute_transfer
+            parts = callback_data.split("_")
+            from_account_id = int(parts[2])
+            to_account_id = int(parts[3])
+            amount = float(parts[4])
+            await execute_transfer(query, context, from_account_id, to_account_id, amount)
         
         # Аналітичні функції - нова система
         elif callback_data == "analytics_expense_stats":
@@ -196,7 +228,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif callback_data == "chart_type_pie":
             await show_chart_data_type_selection(query, context, "pie")
         elif callback_data == "chart_type_bar":
-            await show_chart_data_type_selection(query, context, "bar")
+            # Для стовпчастих графіків одразу переходимо до вибору періоду з типом "comparison"
+            await show_chart_period_selection(query, context, "bar", "comparison")
         elif callback_data.startswith("chart_data_"):
             # Обробляємо вибір типу даних: chart_data_expenses_pie, chart_data_income_bar тощо
             parts = callback_data.split("_")
@@ -258,7 +291,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption="📊 **Тренди витрат по категоріях**\n\nПоказує зміни витрат у топ-5 категоріях протягом часу.",
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("🔙 До візуалізацій", callback_data="analytics_visualizations")
+                        InlineKeyboardButton("◀️ До візуалізацій", callback_data="analytics_visualizations")
                     ]])
                 )
         elif callback_data == "viz_spending_patterns":
@@ -288,7 +321,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption="📅 **Паттерни витрат**\n\nАналіз витрат по днях тижня та місяцях для виявлення закономірностей.",
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("🔙 До візуалізацій", callback_data="analytics_visualizations")
+                        InlineKeyboardButton("◀️ До візуалізацій", callback_data="analytics_visualizations")
                     ]])
                 )
         elif callback_data == "viz_expense_donut":
@@ -319,7 +352,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption="🍩 **Розподіл витрат**\n\nПончикова діаграма показує частку кожної категорії у загальних витратах.",
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("🔙 До візуалізацій", callback_data="analytics_visualizations")
+                        InlineKeyboardButton("◀️ До візуалізацій", callback_data="analytics_visualizations")
                     ]])
                 )
         elif callback_data == "viz_budget_vs_actual":
@@ -352,7 +385,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption="💰 **Бюджет vs Фактичні витрати**\n\nПорівняння планованого бюджету з реальними витратами. Зелений = в межах бюджету, червоний = перевищення.",
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("🔙 До візуалізацій", callback_data="analytics_visualizations")
+                        InlineKeyboardButton("◀️ До візуалізацій", callback_data="analytics_visualizations")
                     ]])
                 )
         
@@ -410,7 +443,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     text=text,
                     reply_markup=InlineKeyboardMarkup([
                         [InlineKeyboardButton("📈 Аналіз трендів", callback_data="trends_analysis")],
-                        [InlineKeyboardButton("🔙 До трендів", callback_data="analytics_trends")]
+                        [InlineKeyboardButton("◀️ До трендів", callback_data="analytics_trends")]
                     ]),
                     parse_mode="Markdown"
                 )
@@ -455,7 +488,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     text=text,
                     reply_markup=InlineKeyboardMarkup([
                         [InlineKeyboardButton("📈 Аналіз трендів", callback_data="trends_analysis")],
-                        [InlineKeyboardButton("🔙 До трендів", callback_data="analytics_trends")]
+                        [InlineKeyboardButton("◀️ До трендів", callback_data="analytics_trends")]
                     ]),
                     parse_mode="Markdown"
                 )
@@ -525,7 +558,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     text=text,
                     reply_markup=InlineKeyboardMarkup([
                         [InlineKeyboardButton("📈 Аналіз трендів", callback_data="trends_analysis")],
-                        [InlineKeyboardButton("🔙 До трендів", callback_data="analytics_trends")]
+                        [InlineKeyboardButton("◀️ До трендів", callback_data="analytics_trends")]
                     ]),
                     parse_mode="Markdown"
                 )
@@ -564,7 +597,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     text=text,
                     reply_markup=InlineKeyboardMarkup([
                         [InlineKeyboardButton("📈 Аналіз трендів", callback_data="trends_analysis")],
-                        [InlineKeyboardButton("🔙 До трендів", callback_data="analytics_trends")]
+                        [InlineKeyboardButton("◀️ До трендів", callback_data="analytics_trends")]
                     ]),
                     parse_mode="Markdown"
                 )
@@ -723,11 +756,33 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Нові налаштування MVP
         elif callback_data == "settings_categories":
+            # Скидаємо пагінацію при переході до категорій
+            if 'categories_view' in context.user_data:
+                context.user_data['categories_view']['page'] = 1
             await show_categories_management(query, context)
         elif callback_data == "add_category":
             await show_add_category_menu(query, context)
         elif callback_data == "view_all_categories":
             await show_all_categories(query, context)
+        
+        # Пагінація категорій
+        elif callback_data == "categories_prev_page":
+            from handlers.settings_handler import handle_categories_pagination
+            await handle_categories_pagination(query, context, "prev")
+        elif callback_data == "categories_next_page":
+            from handlers.settings_handler import handle_categories_pagination
+            await handle_categories_pagination(query, context, "next")
+        
+        # Фільтри категорій
+        elif callback_data == "categories_filter_all":
+            from handlers.settings_handler import handle_categories_filter
+            await handle_categories_filter(query, context, "all")
+        elif callback_data == "categories_filter_expense":
+            from handlers.settings_handler import handle_categories_filter
+            await handle_categories_filter(query, context, "expense")
+        elif callback_data == "categories_filter_income":
+            from handlers.settings_handler import handle_categories_filter
+            await handle_categories_filter(query, context, "income")
         elif callback_data == "add_category_expense":
             await handle_add_category_type(query, context, "expense")
         elif callback_data == "add_category_income":
@@ -735,7 +790,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif callback_data == "delete_category_select":
             await show_delete_category_select(query, context)
         elif callback_data == "edit_category_select":
-            await query.answer("✏️ Функція редагування категорій буде додана в наступній версії", show_alert=True)
+            await query.answer("✏️ Перейдіть до \"📋 Переглянути всі\" та натисніть на категорію для редагування", show_alert=True)
+        elif callback_data.startswith("edit_category_"):
+            category_id = int(callback_data.replace("edit_category_", ""))
+            await show_category_edit_menu(query, context, category_id)
+        elif callback_data.startswith("rename_category_"):
+            category_id = int(callback_data.replace("rename_category_", ""))
+            await show_rename_category_form(query, context, category_id)
         elif callback_data.startswith("confirm_delete_cat_"):
             category_id = int(callback_data.replace("confirm_delete_cat_", ""))
             await confirm_delete_category(query, context, category_id)
@@ -902,11 +963,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if file_source == 'monobank':
                 bank_text = "Monobank"
                 back_callback = "monobank_excel_guide"
-                back_text = "🔙 Назад до Monobank Excel"
+                back_text = "◀️ Назад до Monobank Excel"
             else:  # privatbank або інше
                 bank_text = "ПриватБанку"
                 back_callback = "privatbank_excel_guide"
-                back_text = "🔙 Назад до формату файлу"
+                back_text = "◀️ Назад до формату файлу"
             
             # Відправляємо повідомлення з інструкціями
             await query.edit_message_text(
@@ -940,7 +1001,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                      "Щойно ви відправите файл, я розпочну його обробку.",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Назад", callback_data=back_callback)]
+                    [InlineKeyboardButton("◀️ Назад", callback_data=back_callback)]
                 ])
             )
         elif callback_data == "start_csv_upload":
@@ -958,7 +1019,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                      "Щойно ви відправите файл, я розпочну його обробку.",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Назад", callback_data="monobank_csv_guide")]
+                    [InlineKeyboardButton("◀️ Назад", callback_data="monobank_csv_guide")]
                 ])
             )
         elif callback_data == "monobank_excel_guide":
@@ -1139,6 +1200,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['transactions_view']['page'] = 1
             await query.answer("✅ Фільтр за категорією застосовано")
             await show_transaction_filters(query, context)
+        elif callback_data.startswith("category_page_"):
+            # Обробляємо пагінацію категорій
+            from handlers.transaction_handler import handle_category_page_navigation
+            await handle_category_page_navigation(query, context)
         elif callback_data.startswith("category_") and callback_data != "category_all":
             try:
                 category_id = int(callback_data.split("_")[1])
@@ -1173,6 +1238,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await handle_delete_transaction(query, context)
         elif callback_data.startswith("confirm_delete_"):
             await handle_confirm_delete(query, context)
+        
+        # Обробка неактивних заголовків-роздільників
+        elif callback_data == "noop_header":
+            # Просто відповідаємо на колбек без додаткових дій
+            await query.answer()
+            return
             
         # Загальний обробник для невідомих колбеків
         else:
@@ -1180,7 +1251,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🚧 *Функція '{callback_data}' знаходиться в розробці*\n\n"
                 f"Дана функція буде доступна в наступних оновленнях бота.\n\n"
                 f"Скористайтеся доступними функціями через головне меню.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]]),
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="back_to_main")]]),
                 parse_mode="Markdown"
             )
     except Exception as e:
@@ -1202,7 +1273,7 @@ async def handle_confirm_receipt_add(query, context):
             await query.edit_message_text(
                 "❌ Дані чека не знайдено. Спробуйте завантажити чек ще раз.",
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")
+                    InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
                 ]])
             )
             return
@@ -1232,7 +1303,7 @@ async def handle_confirm_receipt_add(query, context):
             f"Транзакцію додано до ваших витрат.",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("📊 Переглянути транзакції", callback_data="view_all_transactions")],
-                [InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")]
+                [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
             ]),
             parse_mode="Markdown"
         )
@@ -1242,6 +1313,6 @@ async def handle_confirm_receipt_add(query, context):
         await query.edit_message_text(
             "❌ Виникла помилка під час додавання транзакції. Спробуйте ще раз.",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
             ]])
         )

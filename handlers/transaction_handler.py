@@ -28,7 +28,7 @@ async def show_add_transaction_menu(query, context):
             InlineKeyboardButton("📸 Фото чеку", callback_data="start_receipt_photo_upload")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")
+            InlineKeyboardButton("◀️ Назад", callback_data="back_to_main")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -57,7 +57,7 @@ async def show_manual_transaction_type(query, context):
             InlineKeyboardButton("💰 Дохід", callback_data="manual_income")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="add_transaction")
+            InlineKeyboardButton("◀️ Назад", callback_data="add_transaction")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -152,7 +152,7 @@ async def show_upload_statement_form(query, context):
             InlineKeyboardButton("🏦 МоноБанк", callback_data="select_bank_monobank")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="add_transaction")
+            InlineKeyboardButton("◀️ Назад", callback_data="add_transaction")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -184,7 +184,7 @@ async def show_upload_pdf_guide(query, context):
     ]
     
     # Визначаємо банк для кнопки "Назад"
-    back_button_text = "🔙 Назад до форматів"
+    back_button_text = "◀️ Назад до форматів"
     if query.data == "privatbank_pdf_guide":
         back_button_callback = "select_bank_privatbank"
         context.user_data['file_source'] = 'privatbank'
@@ -237,7 +237,7 @@ async def show_upload_excel_guide(query, context):
     """Сучасна інструкція для завантаження Excel виписки Monobank з чітким описом кнопки."""
     keyboard = [
         [InlineKeyboardButton("📤 Надіслати Excel файл", callback_data="start_excel_upload")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="select_bank_monobank")]
+        [InlineKeyboardButton("◀️ Назад", callback_data="select_bank_monobank")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -272,7 +272,7 @@ async def show_privatbank_excel_guide(query, context):
             InlineKeyboardButton("📤 Надіслати Excel файл", callback_data="start_excel_upload")
         ],
         [
-            InlineKeyboardButton("🔙 Назад до форматів", callback_data="select_bank_privatbank")
+            InlineKeyboardButton("◀️ Назад до форматів", callback_data="select_bank_privatbank")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -298,7 +298,7 @@ async def show_upload_csv_guide(query, context):
     """Сучасна, лаконічна інструкція для завантаження CSV виписки Monobank з чітким описом кнопок."""
     keyboard = [
         [InlineKeyboardButton("📤 Надіслати CSV файл", callback_data="start_csv_upload")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="select_bank_monobank")]
+        [InlineKeyboardButton("◀️ Назад", callback_data="select_bank_monobank")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -331,7 +331,7 @@ async def show_monobank_pdf_guide(query, context):
             InlineKeyboardButton("📤 Надіслати PDF файл", callback_data="start_pdf_upload")
         ],
         [
-            InlineKeyboardButton("🔙 Назад до форматів", callback_data="select_bank_monobank")
+            InlineKeyboardButton("◀️ Назад до форматів", callback_data="select_bank_monobank")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -376,7 +376,7 @@ async def show_other_bank_statement_form(query, context):
             InlineKeyboardButton("📄 PDF виписка", callback_data="upload_pdf_guide")
         ],
         [
-            InlineKeyboardButton("🔙 Назад до вибору банку", callback_data="upload_statement")
+            InlineKeyboardButton("◀️ Назад до вибору банку", callback_data="upload_statement")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -416,7 +416,7 @@ async def show_edit_transaction_menu(query, context):
             InlineKeyboardButton("🗑️ Видалити транзакцію", callback_data="delete_transaction")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")
+            InlineKeyboardButton("◀️ Назад", callback_data="back_to_main")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -426,7 +426,7 @@ async def show_edit_transaction_menu(query, context):
         "Оберіть дію, яку ви хочете виконати з транзакцією:\n\n"
         "✏️ *Редагувати транзакцію* - змініть деталі транзакції\n"
         "🗑️ *Видалити транзакцію* - видаліть транзакцію з історії\n\n"
-        "🔙 *Назад* - повернення до головного меню"
+        "◀️ *Назад* - повернення до головного меню"
     )
     
     await query.edit_message_text(
@@ -533,7 +533,7 @@ async def handle_edit_single_transaction(query, context):
                 InlineKeyboardButton("🗑 Видалити", callback_data=f"delete_transaction_{transaction_id}"),
             ],
             [
-                InlineKeyboardButton("🔙 Назад", callback_data="view_all_transactions")
+                InlineKeyboardButton("◀️ Назад", callback_data="view_all_transactions")
             ]
         ]
         
@@ -638,7 +638,7 @@ async def handle_edit_category(query, context):
             ])
         
         keyboard.append([
-            InlineKeyboardButton("🔙 Назад", callback_data=f"edit_transaction_{transaction_id}")
+            InlineKeyboardButton("◀️ Назад", callback_data=f"edit_transaction_{transaction_id}")
         ])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -951,7 +951,7 @@ async def show_all_transactions(query, context):
                 InlineKeyboardButton("� Налаштувати фільтри", callback_data="transaction_filters")
             ],
             [
-                InlineKeyboardButton("🔙 Назад до огляду", callback_data="my_budget_overview")
+                InlineKeyboardButton("◀️ Назад до огляду", callback_data="my_budget_overview")
             ]
         ]
     else:
@@ -1010,7 +1010,7 @@ async def show_all_transactions(query, context):
         keyboard.append([InlineKeyboardButton("🔍 Фільтри", callback_data="transaction_filters")])
         
         # Кнопка повернення
-        keyboard.append([InlineKeyboardButton("🔙 Назад до огляду", callback_data="my_budget_overview")])
+        keyboard.append([InlineKeyboardButton("◀️ Назад до огляду", callback_data="my_budget_overview")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -1135,7 +1135,7 @@ async def handle_import_all_transactions(query, context):
         keyboard = [
             [InlineKeyboardButton("➕ Додати ще транзакції", callback_data="add_transaction")],
             [InlineKeyboardButton("📊 Переглянути всі транзакції", callback_data="view_all_transactions")],
-            [InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")]
+            [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -1182,7 +1182,7 @@ async def handle_edit_transactions(query, context):
         
         if not transactions:
             keyboard = [
-                [InlineKeyboardButton("🔙 Назад", callback_data="view_all_transactions")]
+                [InlineKeyboardButton("◀️ Назад", callback_data="view_all_transactions")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -1225,7 +1225,7 @@ async def handle_edit_transactions(query, context):
             InlineKeyboardButton("Наступні ➡️", callback_data="edit_transactions_next")
         ])
         keyboard.append([
-            InlineKeyboardButton("🔙 Назад", callback_data="view_all_transactions")
+            InlineKeyboardButton("◀️ Назад", callback_data="view_all_transactions")
         ])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1251,7 +1251,7 @@ async def handle_cancel_import(query, context):
     
     keyboard = [
         [InlineKeyboardButton("➕ Спробувати знову", callback_data="upload_statement")],
-        [InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")]
+        [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -1321,7 +1321,7 @@ async def handle_set_import_period(query, context):
                 InlineKeyboardButton("📅 Всі транзакції", callback_data="period_all")
             ],
             [
-                InlineKeyboardButton("🔙 Назад", callback_data="back_to_preview")
+                InlineKeyboardButton("◀️ Назад", callback_data="back_to_preview")
             ]
         ]
         
@@ -1434,7 +1434,7 @@ async def show_receipt_photo_soon(query, context):
             InlineKeyboardButton("📤 Завантажити виписку", callback_data="upload_statement")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="add_transaction")
+            InlineKeyboardButton("◀️ Назад", callback_data="add_transaction")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1509,7 +1509,7 @@ async def show_quick_amount_buttons(query, context, transaction_type):
     
     # Додаємо кнопку для введення вручну
     keyboard.append([InlineKeyboardButton("➕ Ввести іншу суму", callback_data="manual_amount")])
-    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="manual_transaction_type")])
+    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="manual_transaction_type")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -1653,7 +1653,7 @@ async def show_transaction_filters(query, context):
                 InlineKeyboardButton("🔄 Скинути фільтри", callback_data="reset_transactions_filters"),
                 InlineKeyboardButton("🔍 Показати відфільтровані", callback_data="apply_filters")
             ],
-            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_transactions")]
+            [InlineKeyboardButton("◀️ Назад", callback_data="back_to_transactions")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -1798,40 +1798,8 @@ async def handle_category_filter(query, context, preset_category=None):
             # Показуємо оновлений екран фільтрів
             await show_transaction_filters(query, context)
         else:
-            # Отримуємо користувача
-            from database.db_operations import get_user, get_user_categories
-            user = get_user(query.from_user.id)
-            
-            if not user:
-                await query.edit_message_text("Користувач не знайдений.")
-                return
-            
-            # Отримуємо категорії користувача
-            categories = get_user_categories(user.id)
-            
-            # Формуємо клавіатуру з категоріями
-            keyboard = []
-            
-            # Додаємо опцію "Всі категорії"
-            keyboard.append([InlineKeyboardButton("📂 Всі категорії", callback_data="category_all")])
-            
-            # Додаємо категорії
-            for category in categories:
-                icon = category.icon or "📂"
-                keyboard.append([
-                    InlineKeyboardButton(f"{icon} {category.name}", callback_data=f"category_{category.id}")
-                ])
-            
-            # Додаємо кнопку назад
-            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="transaction_filters")])
-            
-            # Відправляємо повідомлення з клавіатурою
-            await query.edit_message_text(
-                "📂 *Оберіть категорію для фільтра*\n\n"
-                "Оберіть категорію зі списку нижче:",
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode="Markdown"
-            )
+            # Показуємо меню категорій з пагінацією
+            await show_category_filter_menu(query, context, page=1)
     
     except Exception as e:
         logger.error(f"Error handling category filter: {str(e)}")
@@ -1871,7 +1839,7 @@ async def show_monobank_statement_form(query, context):
         [InlineKeyboardButton("📋 CSV виписка", callback_data="monobank_csv_guide")],
         [InlineKeyboardButton("📊 Excel (.xls/.xlsx)", callback_data="monobank_excel_guide")],
         [InlineKeyboardButton("📄 PDF виписка", callback_data="monobank_pdf_guide")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="upload_statement")]
+        [InlineKeyboardButton("◀️ Назад", callback_data="upload_statement")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -1909,7 +1877,7 @@ async def show_period_filter_menu(query, context):
             [InlineKeyboardButton("📆 Поточний місяць", callback_data="period_month")],
             [InlineKeyboardButton("📅 Поточний рік", callback_data="period_year")],
             [InlineKeyboardButton("📊 Весь час", callback_data="period_all")],
-            [InlineKeyboardButton("🔙 Назад до фільтрів", callback_data="transaction_filters")]
+            [InlineKeyboardButton("◀️ Назад до фільтрів", callback_data="transaction_filters")]
         ]
         
         # Відмічаємо поточний вибраний період
@@ -1946,7 +1914,7 @@ async def show_type_filter_menu(query, context):
             [InlineKeyboardButton("💰 Тільки доходи", callback_data="type_income")],
             [InlineKeyboardButton("💸 Тільки витрати", callback_data="type_expense")],
             [InlineKeyboardButton("📊 Всі транзакції", callback_data="type_all")],
-            [InlineKeyboardButton("🔙 Назад до фільтрів", callback_data="transaction_filters")]
+            [InlineKeyboardButton("◀️ Назад до фільтрів", callback_data="transaction_filters")]
         ]
         
         # Відмічаємо поточний вибраний тип
@@ -2018,7 +1986,7 @@ async def handle_view_single_transaction(query, context):
                 InlineKeyboardButton("🗑️ Видалити", callback_data=f"delete_transaction_{transaction_id}")
             ],
             [
-                InlineKeyboardButton("🔙 Назад до списку", callback_data="view_all_transactions")
+                InlineKeyboardButton("◀️ Назад до списку", callback_data="view_all_transactions")
             ]
         ]
         
@@ -2078,7 +2046,7 @@ async def handle_monobank_excel_upload(query, context):
             
             keyboard = [
                 [InlineKeyboardButton("📊 Переглянути транзакції", callback_data="view_all_transactions")],
-                [InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")]
+                [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -2098,7 +2066,7 @@ async def show_monobank_excel_guide(query, context):
     """Сучасна інструкція для завантаження Excel виписки Monobank з чітким описом кнопки."""
     keyboard = [
         [InlineKeyboardButton("📤 Надіслати Excel файл", callback_data="start_excel_upload")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="select_bank_monobank")]
+        [InlineKeyboardButton("◀️ Назад", callback_data="select_bank_monobank")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -2377,8 +2345,12 @@ async def handle_change_category(query, context):
         
         if not categories:
             await query.edit_message_text(
-                "❌ У вас немає категорій для цього типу операцій.\n"
-                "Спочатку створіть категорії через меню налаштувань."
+                "📂 *У вас немає категорій*\n\n"
+                "Спочатку створіть категорії через меню налаштувань.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("◀️ Назад", callback_data="transaction_filters")]
+                ]),
+                parse_mode="Markdown"
             )
             return
         
@@ -2395,7 +2367,9 @@ async def handle_change_category(query, context):
             row = []
             for j in range(i, min(i + 2, len(categories))):
                 category = categories[j]
-                button_text = f"{category.icon or '📂'} {category.name}"
+                icon = category.icon or "📂"
+                button_text = f"{icon} {category.name}"
+                
                 row.append(InlineKeyboardButton(
                     button_text, 
                     callback_data=f"select_manual_category_{category.id}"
@@ -2484,7 +2458,7 @@ async def save_transaction_to_db(query, context, category_id):
                 [InlineKeyboardButton("➕ Додати ще", callback_data="add_transaction")],
                 [
                     InlineKeyboardButton("📊 Мій бюджет", callback_data="my_budget_overview"),
-                    InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")
+                    InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
                 ]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -2518,7 +2492,7 @@ async def handle_cancel_transaction(query, context):
         
         keyboard = [
             [InlineKeyboardButton("➕ Спробувати знову", callback_data="add_transaction")],
-            [InlineKeyboardButton("🏠 Головне меню", callback_data="back_to_main")]
+            [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -2532,3 +2506,188 @@ async def handle_cancel_transaction(query, context):
     except Exception as e:
         logger.error(f"Error in handle_cancel_transaction: {e}")
         await query.answer("Виникла помилка.", show_alert=True)
+
+async def show_category_filter_menu(query, context, page=1):
+    """Показує меню вибору категорії з пагінацією"""
+    try:
+        from database.db_operations import get_user, get_user_categories
+        
+        user = get_user(query.from_user.id)
+        if not user:
+            await query.edit_message_text("Користувач не знайдений.")
+            return
+        
+        # Отримуємо поточні фільтри
+        filters = context.user_data.get('transaction_filters', {})
+        current_category = filters.get('category', 'all')
+        
+        # Отримуємо категорії користувача
+        categories = get_user_categories(user.id)
+        
+        if not categories:
+            await query.edit_message_text(
+                "📂 *У вас немає категорій*\n\n"
+                "Спочатку створіть категорії через меню налаштувань.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("◀️ Назад", callback_data="transaction_filters")]
+                ]),
+                parse_mode="Markdown"
+            )
+            return
+        
+        # Розділяємо категорії на витрати та доходи
+        from database.models import TransactionType
+        expense_categories = [c for c in categories if c.type == TransactionType.EXPENSE.value]
+        income_categories = [c for c in categories if c.type == TransactionType.INCOME.value]
+        
+        # Налаштування пагінації - використовуємо всі категорії для підрахунку
+        per_page = 8  # Кількість категорій на сторінку
+        total_categories = len(categories)
+        total_pages = max(1, (total_categories + per_page - 1) // per_page)
+        page = max(1, min(page, total_pages))
+        
+        # Створюємо загальний список для пагінації (витрати + доходи)
+        all_categories_for_pagination = expense_categories + income_categories
+        
+        # Отримуємо категорії для поточної сторінки
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        page_categories = all_categories_for_pagination[start_idx:end_idx]
+        
+        # Формуємо клавіатуру
+        keyboard = []
+        
+        # Додаємо опцію "Всі категорії" тільки на першій сторінці
+        if page == 1:
+            all_button_text = "✅ Всі категорії" if current_category == 'all' else "📂 Всі категорії"
+            keyboard.append([InlineKeyboardButton(all_button_text, callback_data="category_all")])
+        
+        # Розділяємо категорії на поточній сторінці за типом
+        page_expense_categories = [c for c in page_categories if c.type == TransactionType.EXPENSE.value]
+        page_income_categories = [c for c in page_categories if c.type == TransactionType.INCOME.value]
+        
+        # Додаємо категорії витрат
+        if page_expense_categories:
+            # Додаємо заголовок секції витрат
+            keyboard.append([InlineKeyboardButton("💸 ── ВИТРАТИ ──", callback_data="noop_header")])
+            
+            # Додаємо кнопки витрат по 2 в ряд
+            current_section_expenses = []
+            for category in page_expense_categories:
+                icon = category.icon or "💸"
+                is_selected = current_category == category.id
+                button_text = f"✅ {icon} {category.name}" if is_selected else f"{icon} {category.name}"
+                current_section_expenses.append((button_text, f"category_{category.id}"))
+            
+            for i in range(0, len(current_section_expenses), 2):
+                row = []
+                for j in range(i, min(i + 2, len(current_section_expenses))):
+                    button_text, callback_data = current_section_expenses[j]
+                    row.append(InlineKeyboardButton(button_text, callback_data=callback_data))
+                keyboard.append(row)
+        
+        # Додаємо категорії доходів
+        if page_income_categories:
+            # Додаємо заголовок секції доходів (тільки якщо є витрати, інакше це перша секція)
+            if page_expense_categories:
+                keyboard.append([InlineKeyboardButton("💰 ── ДОХОДИ ──", callback_data="noop_header")])
+            else:
+                keyboard.append([InlineKeyboardButton("💰 ── ДОХОДИ ──", callback_data="noop_header")])
+            
+            # Додаємо кнопки доходів по 2 в ряд
+            current_section_incomes = []
+            for category in page_income_categories:
+                icon = category.icon or "💰"
+                is_selected = current_category == category.id
+                button_text = f"✅ {icon} {category.name}" if is_selected else f"{icon} {category.name}"
+                current_section_incomes.append((button_text, f"category_{category.id}"))
+            
+            for i in range(0, len(current_section_incomes), 2):
+                row = []
+                for j in range(i, min(i + 2, len(current_section_incomes))):
+                    button_text, callback_data = current_section_incomes[j]
+                    row.append(InlineKeyboardButton(button_text, callback_data=callback_data))
+                keyboard.append(row)
+        
+        # Додаємо кнопки навігації, якщо потрібно
+        if total_pages > 1:
+            nav_buttons = []
+            
+            if page > 1:
+                nav_buttons.append(InlineKeyboardButton("⬅️ Попередні", callback_data=f"category_page_{page-1}"))
+            
+            if page < total_pages:
+                nav_buttons.append(InlineKeyboardButton("Наступні ➡️", callback_data=f"category_page_{page+1}"))
+            
+            if nav_buttons:  # Додаємо кнопки тільки якщо вони є
+                keyboard.append(nav_buttons)
+        
+        # Додаємо кнопку назад
+        keyboard.append([InlineKeyboardButton("◀️ Назад до фільтрів", callback_data="transaction_filters")])
+        
+        # Визначаємо назву поточної категорії для відображення
+        current_category_name = "Всі категорії"
+        if current_category != 'all' and isinstance(current_category, int):
+            category_obj = next((c for c in categories if c.id == current_category), None)
+            if category_obj:
+                current_category_name = f"{category_obj.icon or '📂'} {category_obj.name}"
+        
+        # Формуємо текст повідомлення
+        text = (
+            f"📂 *Оберіть категорію для фільтра*\n\n"
+            f"Поточний вибір: *{current_category_name}*\n\n"
+        )
+        
+        if total_pages > 1:
+            text += f"Сторінка {page} з {total_pages} | Всього категорій: {total_categories}\n"
+        
+        # Додаємо інформацію про кількість категорій за типами
+        expenses_count = len(expense_categories)
+        incomes_count = len(income_categories)
+        text += f"💸 Витрати: {expenses_count} | 💰 Доходи: {incomes_count}\n\n"
+        
+        text += "Оберіть категорію зі списку:"
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+        # Зберігаємо поточну сторінку
+        context.user_data['category_filter_page'] = page
+        
+    except Exception as e:
+        logger.error(f"Error showing category filter menu: {str(e)}")
+        await query.answer("Помилка при відображенні меню категорій.")
+
+async def handle_category_page_navigation(query, context):
+    """Обробляє навігацію по сторінках категорій"""
+    try:
+        # Витягуємо номер сторінки з callback_data
+        page = int(query.data.split('_')[-1])
+        
+        # Показуємо меню категорій з відповідною сторінкою
+        await show_category_filter_menu(query, context, page=page)
+        
+    except Exception as e:
+        logger.error(f"Error handling category page navigation: {str(e)}")
+        await query.answer("Помилка при навігації по категоріях.")
+
+async def handle_category_selection_for_filter(query, context):
+    """Обробляє вибір категорії для фільтра"""
+    try:
+        # Витягуємо ID категорії з callback_data
+        if query.data == "category_all":
+            category_id = 'all'
+        else:
+            category_id = int(query.data.split('_')[1])
+        
+        # Використовуємо існуючу функцію для встановлення фільтра
+        await handle_category_filter(query, context, preset_category=category_id)
+        
+    except Exception as e:
+        logger.error(f"Error handling category selection: {str(e)}")
+        await query.answer("Помилка при виборі категорії.")

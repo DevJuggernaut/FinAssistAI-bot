@@ -28,24 +28,26 @@ async def show_ai_assistant_menu(query, context):
         keyboard = [
             [
                 InlineKeyboardButton("💡 Персональна порада", callback_data="ai_advice"),
-                InlineKeyboardButton("🔮 Фінансовий прогноз", callback_data="ai_forecast")
+                InlineKeyboardButton("🔮 Прогноз витрат", callback_data="ai_forecast")
             ],
             [
                 InlineKeyboardButton("❓ Запитати AI", callback_data="ai_custom_question")
             ],
             [
-                InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
             ]
         ]
         
         text = (
-            "🤖 **AI-помічник FinAssist**\n\n"
-            "Привіт! Я твій персональний фінансовий помічник на базі штучного інтелекту.\n\n"
-            "💡 **Що я можу:**\n"
-            "• Дати персональні поради по твоїм фінансам\n"
-            "• Створити прогноз витрат на наступний місяць\n"
-            "• Відповісти на будь-які фінансові питання\n\n"
-            "📊 Всі рекомендації базуються на аналізі твоїх реальних транзакцій"
+            "🤖 **AI-помічник**\n\n"
+            "Ваш розумний фінансовий консультант:\n\n"
+            "💡 **Персональна порада**\n"
+            "Аналіз ваших витрат і рекомендації\n\n"
+            "🔮 **Фінансовий прогноз**\n"
+            "Передбачення витрат на наступний місяць\n\n"
+            "❓ **Запитати AI**\n"
+            "Отримайте відповідь на будь-яке питання\n\n"
+            "� *Всі поради базуються на ваших даних*"
         )
         
         await query.edit_message_text(
@@ -59,7 +61,7 @@ async def show_ai_assistant_menu(query, context):
         await query.edit_message_text(
             "❌ Помилка при відкритті AI-помічника",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")]
+                [InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")]
             ])
         )
 
@@ -70,8 +72,8 @@ async def handle_ai_advice(query, context):
         # Показуємо повідомлення про завантаження
         logger.debug("Updating message text to loading state")
         await query.edit_message_text(
-            "🔄 Аналізую твої фінанси та готую персональну пораду...\n\n"
-            "⏳ Це може зайняти кілька секунд"
+            "🤖 **Аналізую ваші фінанси...**\n\n"
+            "⏳ *Готую персональні рекомендації*"
         )
         
         logger.debug("Getting user by telegram ID")
@@ -81,7 +83,7 @@ async def handle_ai_advice(query, context):
             await query.edit_message_text(
                 "❌ Користувач не знайдений",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 AI-помічник", callback_data="ai_assistant_menu")]
+                    [InlineKeyboardButton("◀️ AI-помічник", callback_data="ai_assistant_menu")]
                 ])
             )
             return
@@ -100,12 +102,12 @@ async def handle_ai_advice(query, context):
         if not transactions:
             logger.info("No transactions found, returning message to user")
             await query.edit_message_text(
-                "📊 **Недостатньо даних для аналізу**\n\n"
-                "Для отримання персональних порад потрібно мати хоча б кілька транзакцій.\n"
-                "Додайте кілька витрат або доходів і спробуйте знову.",
+                "📊 **Потрібно більше даних**\n\n"
+                "Для якісних порад додайте кілька транзакцій.\n\n"
+                "💡 *Чим більше даних, тим точніші рекомендації*",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("➕ Додати транзакцію", callback_data="add_transaction")],
-                    [InlineKeyboardButton("🔙 AI-помічник", callback_data="ai_assistant_menu")]
+                    [InlineKeyboardButton("◀️ AI-помічник", callback_data="ai_assistant_menu")]
                 ]),
                 parse_mode="Markdown"
             )
@@ -212,7 +214,7 @@ async def handle_ai_advice(query, context):
                 "📊 **Не вдалося обробити транзакції**\n\n"
                 "Виникла проблема з обробкою ваших транзакцій. Спробуйте ще раз.",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 AI-помічник", callback_data="ai_assistant_menu")]
+                    [InlineKeyboardButton("◀️ AI-помічник", callback_data="ai_assistant_menu")]
                 ]),
                 parse_mode="Markdown"
             )
@@ -232,7 +234,7 @@ async def handle_ai_advice(query, context):
             ],
             [
                 InlineKeyboardButton("🔄 Оновити пораду", callback_data="ai_advice"),
-                InlineKeyboardButton("🔙 AI-помічник", callback_data="ai_assistant_menu")
+                InlineKeyboardButton("◀️ AI-помічник", callback_data="ai_assistant_menu")
             ]
         ]
         
@@ -247,7 +249,7 @@ async def handle_ai_advice(query, context):
         await query.edit_message_text(
             "❌ Помилка при отриманні поради від AI",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 AI-помічник", callback_data="ai_assistant_menu")]
+                [InlineKeyboardButton("◀️ AI-помічник", callback_data="ai_assistant_menu")]
             ])
         )
 
@@ -256,8 +258,8 @@ async def handle_ai_forecast(query, context):
     try:
         # Показуємо повідомлення про завантаження
         await query.edit_message_text(
-            "🔮 Створюю прогноз твоїх витрат на наступний місяць...\n\n"
-            "⏳ Аналізую паттерни та тренди"
+            "🔮 **Створюю прогноз витрат...**\n\n"
+            "⏳ *Аналізую ваші фінансові паттерни*"
         )
         
         user = get_user(query.from_user.id)
@@ -265,7 +267,7 @@ async def handle_ai_forecast(query, context):
             await query.edit_message_text(
                 "❌ Користувач не знайдений",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 AI-помічник", callback_data="ai_assistant_menu")]
+                    [InlineKeyboardButton("◀️ AI-помічник", callback_data="ai_assistant_menu")]
                 ])
             )
             return
@@ -277,12 +279,12 @@ async def handle_ai_forecast(query, context):
         
         if len(transactions) < 5:
             await query.edit_message_text(
-                "📊 **Недостатньо даних для прогнозу**\n\n"
-                "Для створення точного прогнозу потрібно мати принаймні 5 транзакцій.\n"
-                "Додайте більше витрат або доходів і спробуйте знову.",
+                "📊 **Потрібно більше даних**\n\n"
+                "Для точного прогнозу додайте ще кілька транзакцій.\n\n"
+                "💡 *Мінімум 5 операцій для якісного прогнозу*",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("➕ Додати транзакцію", callback_data="add_transaction")],
-                    [InlineKeyboardButton("🔙 AI-помічник", callback_data="ai_assistant_menu")]
+                    [InlineKeyboardButton("◀️ AI-помічник", callback_data="ai_assistant_menu")]
                 ]),
                 parse_mode="Markdown"
             )
@@ -345,7 +347,7 @@ async def handle_ai_forecast(query, context):
             ],
             [
                 InlineKeyboardButton("🔄 Оновити прогноз", callback_data="ai_forecast"),
-                InlineKeyboardButton("🔙 AI-помічник", callback_data="ai_assistant_menu")
+                InlineKeyboardButton("◀️ AI-помічник", callback_data="ai_assistant_menu")
             ]
         ]
         
@@ -360,7 +362,7 @@ async def handle_ai_forecast(query, context):
         await query.edit_message_text(
             "❌ Помилка при створенні прогнозу",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 AI-помічник", callback_data="ai_assistant_menu")]
+                [InlineKeyboardButton("◀️ AI-помічник", callback_data="ai_assistant_menu")]
             ])
         )
 
@@ -375,13 +377,13 @@ async def start_ai_question(update, context):
             
         await query.edit_message_text(
             "❓ **Запитайте AI**\n\n"
-            "Введіть ваше фінансове питання, і я дам персональну відповідь на основі ваших даних.\n\n"
-            "💡 **Приклади питань:**\n"
-            "• Як мені заощадити на відпустку?\n"
-            "• Чи багато я витрачаю на їжу?\n"
-            "• Які категорії витрат можна скоротити?\n"
-            "• Як планувати бюджет на наступний місяць?\n\n"
-            "✍️ Напишіть ваше питання:",
+            "Поставте будь-яке фінансове питання:\n\n"
+            "💡 **Приклади:**\n"
+            "• Як заощадити на відпустку?\n"
+            "• Чи багато витрачаю на їжу?\n"
+            "• Як планувати бюджет?\n"
+            "• Де можна економити?\n\n"
+            "✍️ *Введіть ваше питання:*",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("❌ Скасувати", callback_data="ai_assistant_menu")]
             ]),
@@ -403,7 +405,7 @@ async def start_ai_question(update, context):
             await query.edit_message_text(
                 "❌ Помилка при започаткуванні діалогу",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 AI-помічник", callback_data="ai_assistant_menu")]
+                    [InlineKeyboardButton("◀️ AI-помічник", callback_data="ai_assistant_menu")]
                 ])
             )
         return ConversationHandler.END
@@ -418,15 +420,15 @@ async def handle_ai_question(update, context):
             await update.message.reply_text(
                 "❌ Користувач не знайдений",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 AI-помічник", callback_data="ai_assistant_menu")]
+                    [InlineKeyboardButton("◀️ AI-помічник", callback_data="ai_assistant_menu")]
                 ])
             )
             return ConversationHandler.END
         
         # Показуємо повідомлення про обробку
         processing_msg = await update.message.reply_text(
-            "🤔 AI обробляє ваше питання...\n\n"
-            "⏳ Аналізую дані та готую відповідь"
+            "� **Обробляю питання...**\n\n"
+            "⏳ *Готую персональну відповідь*"
         )
         
         # Отримуємо транзакції для контексту
@@ -490,7 +492,7 @@ async def handle_ai_question(update, context):
                 InlineKeyboardButton("💡 Порада", callback_data="ai_advice")
             ],
             [
-                InlineKeyboardButton("🔙 AI-помічник", callback_data="ai_assistant_menu")
+                InlineKeyboardButton("◀️ AI-помічник", callback_data="ai_assistant_menu")
             ]
         ]
         
@@ -507,7 +509,7 @@ async def handle_ai_question(update, context):
         await update.message.reply_text(
             "❌ Помилка при обробці питання",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 AI-помічник", callback_data="ai_assistant_menu")]
+                [InlineKeyboardButton("◀️ AI-помічник", callback_data="ai_assistant_menu")]
             ])
         )
         return ConversationHandler.END

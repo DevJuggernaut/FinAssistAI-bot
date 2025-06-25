@@ -34,6 +34,14 @@ from services.statement_parser import StatementParser, ReceiptProcessor
 from services.ml_categorizer import TransactionCategorizer
 from services.openai_service import OpenAIService
 from services.analytics_service import AnalyticsService
+from services.tavria_receipt_parser import TavriaReceiptParser
+
+# Опціонально: імпортуємо health server для Render
+try:
+    from health_server import start_health_server
+    HEALTH_SERVER_AVAILABLE = True
+except ImportError:
+    HEALTH_SERVER_AVAILABLE = False
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -48,9 +56,16 @@ receipt_processor = ReceiptProcessor()
 transaction_categorizer = TransactionCategorizer()
 openai_service = OpenAIService(OPENAI_API_KEY)
 analytics_service = AnalyticsService()
+tavria_receipt_parser = TavriaReceiptParser()
 
 def main():
     """Запуск бота"""
+    # Запускаємо health server для Render (опціонально)
+    if HEALTH_SERVER_AVAILABLE:
+        health_server = start_health_server()
+        if health_server:
+            logger.info(f"Health server started on port {os.getenv('PORT', 8000)}")
+    
     # Визначаємо, чи знаходимось в режимі розробки
     dev_mode = os.environ.get('DEV_MODE', 'false').lower() == 'true'
     

@@ -37,40 +37,31 @@ async def show_analytics_main_menu(query, context):
             return
         
         # Формуємо текст з інформацією про доступні опції
-        text = "📊 **Аналітика та звіти**\n\n"
-        text += "Оберіть тип аналізу ваших фінансів:\n\n"
+        text = "📊 **Ваша фінансова аналітика**\n\n"
+        text += "Отримайте детальну картину своїх фінансів:\n\n"
         
-        text += "� **Графіки** - візуальні діаграми:\n"
-        text += "• Розподіл витрат по категоріях\n"
-        text += "• Динаміка витрат у часі\n"
-        text += "• Порівняння доходів та витрат\n"
-        text += "• Аналіз витрат по днях тижня\n\n"
+        text += "📈 **Графіки** — візуалізація даних\n"
+        text += "Діаграми витрат, доходів та трендів\n\n"
         
-        text += "� **Статистика** - детальні показники:\n"
-        text += "• Загальна статистика за період\n"
-        text += "• Топ категорій витрат\n"
-        text += "• Динаміка балансу\n"
-        text += "• Коефіцієнт заощаджень\n\n"
+        text += "📊 **Статистика** — числа та факти\n"
+        text += "Детальні показники за період\n\n"
         
-        text += "📄 **PDF Звіт** - повний аналітичний документ:\n"
-        text += "• Повна фінансова картина\n"
-        text += "• Графіки та діаграми\n"
-        text += "• Персональні рекомендації\n"
-        text += "• Готовий до збереження та поширення\n\n"
+        text += "📄 **PDF Звіт** — готовий документ\n"
+        text += "Повний аналіз з рекомендаціями\n\n"
         
-        text += "Виберіть потрібний розділ для детального аналізу 👇"
+        text += "👆 *Оберіть формат аналізу*"
         
         # Меню з 3 кнопками: графіки, статистика та PDF звіт
         keyboard = [
             [
-                InlineKeyboardButton("📊 Графіки", callback_data="analytics_charts"),
-                InlineKeyboardButton("📈 Статистика", callback_data="analytics_detailed")
+                InlineKeyboardButton("� Графіки", callback_data="analytics_charts"),
+                InlineKeyboardButton("� Статистика", callback_data="analytics_detailed")
             ],
             [
                 InlineKeyboardButton("📄 PDF Звіт", callback_data="generate_pdf_report")
             ],
             [
-                InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
             ]
         ]
         
@@ -84,7 +75,7 @@ async def show_analytics_main_menu(query, context):
         logger.error(f"Error in show_analytics_main_menu: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при завантаженні аналітики",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="back_to_main")]])
         )
 
 # ==================== СТАТИСТИКА ВИТРАТ ====================
@@ -94,20 +85,23 @@ async def show_expense_statistics(query, context):
     keyboard = [
         [
             InlineKeyboardButton("📅 Тиждень", callback_data="expense_stats_week"),
-            InlineKeyboardButton("📆 Місяць", callback_data="expense_stats_month"),
+            InlineKeyboardButton("📆 Місяць", callback_data="expense_stats_month")
+        ],
+        [
             InlineKeyboardButton("📊 Квартал", callback_data="expense_stats_quarter")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="analytics")
+            InlineKeyboardButton("◀️ Аналітика", callback_data="analytics")
         ]
     ]
     
     text = (
         "📈 **Статистика витрат**\n\n"
         "Оберіть період для аналізу:\n\n"
-        "• Тиждень — останні 7 днів\n"
-        "• Місяць — поточний календарний місяць\n"
-        "• Квартал — останні 3 місяці\n"
+        "📅 **Тиждень** — останні 7 днів\n"
+        "📆 **Місяць** — поточний календарний місяць\n"
+        "📊 **Квартал** — останні 3 місяці\n\n"
+        "👆 *Натисніть на потрібний період*"
     )
     
     await query.edit_message_text(
@@ -127,8 +121,8 @@ async def show_period_statistics(query, context, period_type, chart_type=None):
         # Визначаємо період
         now = datetime.now()
         if period_type == "week":
-            start_date = now - timedelta(days=7)
-            period_name = "останній тиждень"
+            start_date = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+            period_name = "останні 7 днів"
         elif period_type == "month":
             start_date = now.replace(day=1)
             period_name = "поточний місяць"
@@ -201,7 +195,7 @@ async def show_period_statistics(query, context, period_type, chart_type=None):
             ],
             [
                 InlineKeyboardButton("📈 Лінійний графік", callback_data=f"expense_chart_line_{period_type}"),
-                InlineKeyboardButton("🔙 Назад", callback_data="analytics")
+                InlineKeyboardButton("◀️ Назад", callback_data="analytics")
             ]
         ]
         
@@ -235,14 +229,14 @@ async def show_period_statistics(query, context, period_type, chart_type=None):
                 logger.error(f"Error in show_period_statistics: {str(e)}")
                 await query.edit_message_text(
                     "❌ Помилка при формуванні статистики",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics")]])
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
                 )
         
     except Exception as e:
         logger.error(f"Error in show_period_statistics: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при формуванні статистики",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
         )
 
 # ==================== AI РЕКОМЕНДАЦІЇ ====================
@@ -293,7 +287,7 @@ async def show_ai_recommendations(query, context):
                 InlineKeyboardButton("🔄 Оновити аналіз", callback_data="analytics_ai_recommendations")
             ],
             [
-                InlineKeyboardButton("🔙 Назад", callback_data="analytics")
+                InlineKeyboardButton("◀️ Назад", callback_data="analytics")
             ]
         ]
         
@@ -321,7 +315,7 @@ async def show_ai_recommendations(query, context):
         logger.error(f"Error in show_ai_recommendations: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при отриманні AI рекомендацій",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
         )
 
 # ==================== ЗВІТИ ЗА ПЕРІОД ====================
@@ -346,7 +340,7 @@ async def show_period_reports(query, context):
             InlineKeyboardButton("📧 Надіслати звіт", callback_data="send_report_menu")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="analytics")
+            InlineKeyboardButton("◀️ Назад", callback_data="analytics")
         ]
     ]
     
@@ -386,7 +380,7 @@ async def show_period_comparison(query, context):
         ],
         [
             InlineKeyboardButton("📊 Трендовий аналіз", callback_data="trend_analysis"),
-            InlineKeyboardButton("🔙 Назад", callback_data="analytics")
+            InlineKeyboardButton("◀️ Назад", callback_data="analytics")
         ]
     ]
     
@@ -425,8 +419,8 @@ async def show_detailed_categories(query, context, period_type):
         # Визначаємо період
         now = datetime.now()
         if period_type == "week":
-            start_date = now - timedelta(days=7)
-            period_name = "тиждень"
+            start_date = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+            period_name = "7 днів"
         elif period_type == "month":
             start_date = now.replace(day=1)
             period_name = "місяць"
@@ -485,7 +479,7 @@ async def show_detailed_categories(query, context, period_type):
                 InlineKeyboardButton("📋 Експортувати", callback_data=f"export_categories_{period_type}")
             ],
             [
-                InlineKeyboardButton("🔙 Назад", callback_data=f"expense_stats_{period_type}")
+                InlineKeyboardButton("◀️ Назад", callback_data=f"expense_stats_{period_type}")
             ]
         ]
         
@@ -499,7 +493,7 @@ async def show_detailed_categories(query, context, period_type):
         logger.error(f"Error in show_detailed_categories: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при аналізі категорій",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data=f"expense_stats_{period_type}")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data=f"expense_stats_{period_type}")]])
         )
 
 async def show_top_transactions(query, context, period_type):
@@ -513,8 +507,8 @@ async def show_top_transactions(query, context, period_type):
         # Визначаємо період
         now = datetime.now()
         if period_type == "week":
-            start_date = now - timedelta(days=7)
-            period_name = "тиждень"
+            start_date = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+            period_name = "7 днів"
         elif period_type == "month":
             start_date = now.replace(day=1)
             period_name = "місяць"
@@ -588,7 +582,7 @@ async def show_top_transactions(query, context, period_type):
                 InlineKeyboardButton("💡 AI інсайти", callback_data=f"ai_transaction_insights_{period_type}")
             ],
             [
-                InlineKeyboardButton("🔙 Назад", callback_data=f"expense_stats_{period_type}")
+                InlineKeyboardButton("◀️ Назад", callback_data=f"expense_stats_{period_type}")
             ]
         ]
         
@@ -602,7 +596,7 @@ async def show_top_transactions(query, context, period_type):
         logger.error(f"Error in show_top_transactions: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при аналізі топ операцій",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data=f"expense_stats_{period_type}")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data=f"expense_stats_{period_type}")]])
         )
 
 # ==================== AI АНАЛІЗ СПЕЦИФІЧНИХ ОБЛАСТЕЙ ====================
@@ -674,7 +668,7 @@ async def show_ai_savings_tips(query, context):
                 InlineKeyboardButton("🔄 Оновити поради", callback_data="ai_savings_tips")
             ],
             [
-                InlineKeyboardButton("🔙 Назад", callback_data="analytics_ai_recommendations")
+                InlineKeyboardButton("◀️ Назад", callback_data="analytics_ai_recommendations")
             ]
         ]
         
@@ -688,7 +682,7 @@ async def show_ai_savings_tips(query, context):
         logger.error(f"Error in show_ai_savings_tips: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при формуванні порад",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics_ai_recommendations")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_ai_recommendations")]])
         )
 
 # ==================== ДОПОМІЖНІ ФУНКЦІЇ ====================
@@ -705,7 +699,7 @@ async def show_analytics_settings(query, context):
             InlineKeyboardButton("📧 Налаштування експорту", callback_data="analytics_export_settings")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="analytics")
+            InlineKeyboardButton("◀️ Назад", callback_data="analytics")
         ]
     ]
     
@@ -740,7 +734,7 @@ async def show_auto_reports_settings(query, context):
             InlineKeyboardButton("🔔 Формат нагадувань", callback_data="reminder_format_settings")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="analytics_settings")
+            InlineKeyboardButton("◀️ Назад", callback_data="analytics_settings")
         ]
     ]
     
@@ -782,7 +776,7 @@ async def show_report_format_settings(query, context):
             InlineKeyboardButton("📏 Рівень деталізації", callback_data="detail_level_settings")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="analytics_settings")
+            InlineKeyboardButton("◀️ Назад", callback_data="analytics_settings")
         ]
     ]
     
@@ -824,7 +818,7 @@ async def show_goals_reminders_settings(query, context):
             InlineKeyboardButton("📊 Прогрес-бар в повідомленнях", callback_data="progress_display")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="analytics_settings")
+            InlineKeyboardButton("◀️ Назад", callback_data="analytics_settings")
         ]
     ]
     
@@ -870,7 +864,7 @@ async def show_export_settings(query, context):
             InlineKeyboardButton("⚙️ Автоекспорт", callback_data="auto_export_settings")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="analytics_settings")
+            InlineKeyboardButton("◀️ Назад", callback_data="analytics_settings")
         ]
     ]
     
@@ -909,8 +903,8 @@ async def show_ai_analysis_for_period(query, context, period_type):
         # Визначаємо період
         now = datetime.now()
         if period_type == "week":
-            start_date = now - timedelta(days=7)
-            period_name = "тиждень"
+            start_date = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+            period_name = "7 днів"
         elif period_type == "month":
             start_date = now.replace(day=1)
             period_name = "місяць"
@@ -984,7 +978,7 @@ async def show_ai_analysis_for_period(query, context, period_type):
                 InlineKeyboardButton("📊 Детальна статистика", callback_data=f"expense_stats_{period_type}")
             ],
             [
-                InlineKeyboardButton("🔙 Назад", callback_data="analytics_ai_recommendations")
+                InlineKeyboardButton("◀️ Назад", callback_data="analytics_ai_recommendations")
             ]
         ]
         
@@ -998,7 +992,7 @@ async def show_ai_analysis_for_period(query, context, period_type):
         logger.error(f"Error in show_ai_analysis_for_period: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при формуванні AI аналізу",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics_ai_recommendations")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_ai_recommendations")]])
         )
 
 # ==================== ПОРІВНЯННЯ ПЕРІОДІВ ДЕТАЛЬНО ====================
@@ -1015,11 +1009,13 @@ async def show_period_comparison_detail(query, context, period_type):
         
         # Визначаємо поточний та попередній періоди
         if period_type == "week":
-            current_start = now - timedelta(days=7)
+            # Поточний тиждень - останні 7 днів
+            current_start = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
             current_end = now
-            prev_start = now - timedelta(days=14)
-            prev_end = now - timedelta(days=7)
-            period_name = "тиждень"
+            # Попередній тиждень - 7 днів перед поточним
+            prev_start = (now - timedelta(days=13)).replace(hour=0, minute=0, second=0, microsecond=0)
+            prev_end = (now - timedelta(days=7)).replace(hour=23, minute=59, second=59, microsecond=999999)
+            period_name = "7 днів"
         elif period_type == "month":
             current_start = now.replace(day=1)
             current_end = now
@@ -1093,7 +1089,7 @@ async def show_period_comparison_detail(query, context, period_type):
                 InlineKeyboardButton("💡 AI поради", callback_data=f"ai_analysis_{period_type}")
             ],
             [
-                InlineKeyboardButton("🔙 Назад", callback_data="analytics_period_comparison")
+                InlineKeyboardButton("◀️ Назад", callback_data="analytics_period_comparison")
             ]
         ]
         
@@ -1107,7 +1103,7 @@ async def show_period_comparison_detail(query, context, period_type):
         logger.error(f"Error in show_period_comparison_detail: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при порівнянні періодів",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics_period_comparison")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_period_comparison")]])
         )
 
 # ==================== НАЛАШТУВАННЯ АНАЛІТИКИ ====================
@@ -1132,7 +1128,7 @@ async def show_category_limits_settings(query, context):
             InlineKeyboardButton("📊 Переглянути всі ліміти", callback_data="view_all_limits")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="analytics_ai_recommendations")
+            InlineKeyboardButton("◀️ Назад", callback_data="analytics_ai_recommendations")
         ]
     ]
     
@@ -1221,7 +1217,7 @@ async def show_ai_budget_planning(query, context):
                 InlineKeyboardButton("🔄 Оновити прогноз", callback_data="ai_budget_planning")
             ],
             [
-                InlineKeyboardButton("🔙 Назад", callback_data="analytics_ai_recommendations")
+                InlineKeyboardButton("◀️ Назад", callback_data="analytics_ai_recommendations")
             ]
         ]
         
@@ -1235,7 +1231,7 @@ async def show_ai_budget_planning(query, context):
         logger.error(f"Error in show_ai_budget_planning: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при формуванні AI планування",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics_ai_recommendations")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_ai_recommendations")]])
         )
 
 async def show_savings_goals(query, context):
@@ -1254,7 +1250,7 @@ async def show_savings_goals(query, context):
             InlineKeyboardButton("🔔 Налаштування нагадувань", callback_data="goals_reminders")
         ],
         [
-            InlineKeyboardButton("🔙 Назад", callback_data="analytics_ai_recommendations")
+            InlineKeyboardButton("◀️ Назад", callback_data="analytics_ai_recommendations")
         ]
     ]
     
@@ -1300,7 +1296,7 @@ async def show_analytics_visualizations(query, context):
                 InlineKeyboardButton("💰 Бюджет vs Факт", callback_data="viz_budget_vs_actual")
             ],
             [
-                InlineKeyboardButton("🔙 До аналітики", callback_data="analytics")
+                InlineKeyboardButton("◀️ До аналітики", callback_data="analytics")
             ]
         ]
         
@@ -1326,7 +1322,7 @@ async def show_analytics_visualizations(query, context):
         logger.error(f"Error in show_analytics_visualizations: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при завантаженні візуалізацій",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
         )
 
 async def show_spending_heatmap(query, context):
@@ -1362,7 +1358,7 @@ async def show_spending_heatmap(query, context):
             caption="🔥 **Теплова карта ваших витрат**\n\nПоказує найактивніші години та дні для витрат. Чим темніше колір, тим більше витрат.",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 До візуалізацій", callback_data="analytics_visualizations")
+                InlineKeyboardButton("◀️ До візуалізацій", callback_data="analytics_visualizations")
             ]])
         )
         
@@ -1370,7 +1366,7 @@ async def show_spending_heatmap(query, context):
         logger.error(f"Error in show_spending_heatmap: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка створення теплової карти",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics_visualizations")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_visualizations")]])
         )
 
 async def show_cash_flow_chart(query, context):
@@ -1399,7 +1395,7 @@ async def show_cash_flow_chart(query, context):
         if not transaction_data:
             await query.edit_message_text(
                 "📭 Немає транзакцій за останній місяць для створення графіку",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics_charts")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_charts")]])
             )
             return
         
@@ -1413,7 +1409,7 @@ async def show_cash_flow_chart(query, context):
             caption="💸 **Аналіз грошового потоку**\n\nВерхня частина: щоденні доходи та витрати\nНижня частина: кумулятивний баланс\n\n📈 Зелена зона = профіцит\n📉 Червона зона = дефіцит",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 До візуалізацій", callback_data="analytics_visualizations")
+                InlineKeyboardButton("◀️ До візуалізацій", callback_data="analytics_visualizations")
             ]])
         )
         
@@ -1421,7 +1417,7 @@ async def show_cash_flow_chart(query, context):
         logger.error(f"Error in show_cash_flow_chart: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка створення графіку грошового потоку",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics_visualizations")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_visualizations")]])
         )
 
 async def show_analytics_trends(query, context):
@@ -1438,7 +1434,7 @@ async def show_analytics_trends(query, context):
             ],
             [
                 InlineKeyboardButton("💡 Інсайти тенденцій", callback_data="trends_insights"),
-                InlineKeyboardButton("🔙 До аналітики", callback_data="analytics")
+                InlineKeyboardButton("◀️ До аналітики", callback_data="analytics")
             ]
         ]
         
@@ -1463,7 +1459,7 @@ async def show_analytics_trends(query, context):
         logger.error(f"Error in show_analytics_trends: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при завантаженні трендів",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
         )
 
 async def show_trends_analysis(query, context):
@@ -1496,7 +1492,7 @@ async def show_trends_analysis(query, context):
         if "error" in trends_result:
             await query.edit_message_text(
                 f"❌ {trends_result['error']}",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics_trends")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_trends")]])
             )
             return
         
@@ -1558,7 +1554,7 @@ async def show_trends_analysis(query, context):
             ],
             [
                 InlineKeyboardButton("📊 Сезонність", callback_data="trends_seasonality"),
-                InlineKeyboardButton("🔙 Назад", callback_data="analytics_trends")
+                InlineKeyboardButton("◀️ Назад", callback_data="analytics_trends")
             ]
         ]
         
@@ -1572,7 +1568,7 @@ async def show_trends_analysis(query, context):
         logger.error(f"Error in show_trends_analysis: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка аналізу трендів",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics_trends")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_trends")]])
         )
 
 async def show_financial_health_score(query, context):
@@ -1621,7 +1617,7 @@ async def show_financial_health_score(query, context):
         if "error" in health_score:
             await query.edit_message_text(
                 f"❌ {health_score['error']}",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
             )
             return
         
@@ -1670,7 +1666,7 @@ async def show_financial_health_score(query, context):
                 InlineKeyboardButton("🔄 Оновити оцінку", callback_data="analytics_health_score")
             ],
             [
-                InlineKeyboardButton("🔙 До аналітики", callback_data="analytics")
+                InlineKeyboardButton("◀️ До аналітики", callback_data="analytics")
             ]
         ]
         
@@ -1684,7 +1680,7 @@ async def show_financial_health_score(query, context):
         logger.error(f"Error in show_financial_health_score: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка розрахунку фінансового здоров'я",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
         )
 
 async def show_personal_insights(query, context):
@@ -1717,7 +1713,7 @@ async def show_personal_insights(query, context):
         if not insights or (len(insights) == 1 and "Немає даних" in insights[0]):
             await query.edit_message_text(
                 "📭 Недостатньо даних для генерації персональних інсайтів.\n\nДодайте більше транзакцій для отримання корисних рекомендацій.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
             )
             return
         
@@ -1749,7 +1745,7 @@ async def show_personal_insights(query, context):
             ],
             [
                 InlineKeyboardButton("🔄 Оновити інсайти", callback_data="analytics_insights"),
-                InlineKeyboardButton("🔙 До аналітики", callback_data="analytics")
+                InlineKeyboardButton("◀️ До аналітики", callback_data="analytics")
             ]
         ]
         
@@ -1763,7 +1759,7 @@ async def show_personal_insights(query, context):
         logger.error(f"Error in show_personal_insights: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка генерації персональних інсайтів",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
         )
 
 # ==================== СПРОЩЕНІ ФУНКЦІЇ АНАЛІТИКИ ====================
@@ -1822,84 +1818,83 @@ async def show_analytics_detailed(query, context):
         savings_rate = ((total_income - total_expenses) / total_income * 100) if total_income > 0 else 0
         
         # Формуємо текст з висновками
-        text = "📈 **Ваша фінансова статистика**\n\n"
+        text = "� **Детальна статистика**\n\n"
         
         # Основні показники
-        text += "� **Основні показники (останні 30 днів):**\n"
+        text += "💰 **За останні 30 днів:**\n"
         text += f"💵 Доходи: `{total_income:.2f} грн`\n"
         text += f"💸 Витрати: `{total_expenses:.2f} грн`\n"
-        text += f"� Баланс: `{balance:.2f} грн`\n"
-        text += f"� Середньо на день: `{daily_avg:.2f} грн`\n\n"
+        text += f"📊 Баланс: `{balance:.2f} грн`\n"
+        text += f"📅 На день: `{daily_avg:.2f} грн`\n\n"
         
         # Аналіз заощаджень
-        text += "� **Аналіз заощаджень:**\n"
+        text += "💎 **Заощадження:**\n"
         if savings_rate >= 20:
-            text += f"🎉 Відмінно! Ви заощаджуєте `{savings_rate:.1f}%` доходу\n"
-            text += "✅ Це дуже хороший показник для фінансової стабільності\n\n"
+            text += f"🎉 Відмінно! `{savings_rate:.1f}%` від доходу\n"
+            text += "✅ Ви фінансово стабільні\n\n"
         elif savings_rate >= 10:
-            text += f"� Добре! Заощадження складають `{savings_rate:.1f}%`\n"
-            text += "💡 Спробуйте збільшити до 20% для кращої безпеки\n\n"
+            text += f"👍 Добре! `{savings_rate:.1f}%` заощаджень\n"
+            text += "💡 Можна покращити до 20%\n\n"
         elif savings_rate >= 0:
-            text += f"📊 Заощадження: `{savings_rate:.1f}%` від доходу\n"
-            text += "⚠️ Рекомендуємо збільшити заощадження до 10-20%\n\n"
+            text += f"� Заощадження: `{savings_rate:.1f}%`\n"
+            text += "⚠️ Рекомендуємо 10-20%\n\n"
         else:
-            text += f"🚨 Увага! Перевитрата на `{abs(savings_rate):.1f}%`\n"
-            text += "💡 Потрібно переглянути витрати та зменшити їх\n\n"
+            text += f"🚨 Перевитрата `{abs(savings_rate):.1f}%`\n"
+            text += "💡 Потрібно скоротити витрати\n\n"
         
         # Аналіз витрат
-        text += "🎯 **Структура витрат:**\n"
+        text += "🎯 **Найбільші витрати:**\n"
         if top_category[1] > 0:
-            text += f"🏆 Найбільша категорія: **{top_category[0]}**\n"
-            text += f"💰 Сума: `{top_category[1]:.2f} грн` ({top_category_percent:.1f}%)\n"
+            text += f"🏆 **{top_category[0]}**\n"
+            text += f"💰 `{top_category[1]:.2f} грн` ({top_category_percent:.1f}%)\n"
             
             if top_category_percent > 40:
-                text += "⚠️ Ця категорія займає забагато від бюджету\n"
+                text += "⚠️ Забагато для однієї категорії\n"
             elif top_category_percent > 25:
-                text += "📊 Помірна концентрація витрат в одній категорії\n"
+                text += "📊 Помірна концентрація\n"
             else:
-                text += "✅ Збалансований розподіл витрат\n"
+                text += "✅ Збалансовано\n"
         text += "\n"
         
         # Тренд витрат
-        text += f"📈 **Тренд витрат:** {trend_emoji} {trend}\n"
+        text += f"📈 **Тенденція:** {trend_emoji} {trend}\n"
         if prev_expenses > 0:
             change_amount = total_expenses - prev_expenses
-            text += f"Зміна: `{change_amount:+.2f} грн` порівняно з попереднім місяцем\n\n"
+            text += f"Зміна: `{change_amount:+.2f} грн` за місяць\n\n"
         
         # Персональні висновки та поради
-        text += "� **Ваші фінансові висновки:**\n"
+        text += "💡 **Рекомендації:**\n"
         
         conclusions = []
         if savings_rate < 0:
-            conclusions.append("🚨 Негайно потрібно скоротити витрати")
+            conclusions.append("🚨 Скоротіть витрати негайно")
         elif savings_rate < 10:
-            conclusions.append("📈 Є потенціал для збільшення заощаджень")
+            conclusions.append("📈 Збільшіть заощадження")
         
         if top_category_percent > 35:
-            conclusions.append(f"🎯 Зосередьтеся на оптимізації категорії '{top_category[0]}'")
+            conclusions.append(f"🎯 Оптимізуйте '{top_category[0]}'")
         
         if trend == "зростаючий":
-            conclusions.append("� Контролюйте зростання витрат")
+            conclusions.append("⚡ Контролюйте зростання витрат")
         elif trend == "спадний":
-            conclusions.append("✅ Ви успішно зменшуєте витрати")
+            conclusions.append("✅ Ви економите - так тримати!")
         
-        daily_budget = stats['total_expenses'] / 30
-        weekly_budget = daily_budget * 7
-        conclusions.append(f"📅 Плануйте тижневий бюджет ~{weekly_budget:.0f} грн")
+        weekly_budget = daily_avg * 7
+        conclusions.append(f"📅 Тижневий бюджет: ~{weekly_budget:.0f} грн")
         
         if not conclusions:
-            conclusions.append("📊 Ваші фінанси в задовільному стані")
+            conclusions.append("📊 Фінанси в нормі")
         
-        for conclusion in conclusions[:4]:  # Показуємо максимум 4 висновки
+        for conclusion in conclusions[:4]:  # Показуємо максимум 4 рекомендації
             text += f"• {conclusion}\n"
         
         keyboard = [
             [
-                InlineKeyboardButton("📊 Графіки", callback_data="analytics_charts"),
-                InlineKeyboardButton("💡 Детальні поради", callback_data="analytics_insights_simple")
+                InlineKeyboardButton("� Графіки", callback_data="analytics_charts"),
+                InlineKeyboardButton("💡 AI Поради", callback_data="analytics_insights_simple")
             ],
             [
-                InlineKeyboardButton("🔙 До аналітики", callback_data="analytics")
+                InlineKeyboardButton("◀️ Аналітика", callback_data="analytics")
             ]
         ]
         
@@ -1913,31 +1908,33 @@ async def show_analytics_detailed(query, context):
         logger.error(f"Error in show_analytics_detailed: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при завантаженні статистики",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
         )
 
 async def show_analytics_charts(query, context):
     """Показує меню з двома основними типами графіків"""
     try:
         text = (
-            "📊 **Графіки та діаграми**\n\n"
-            "Оберіть тип графіку для аналізу ваших фінансів:\n\n"
-            "🥧 **Кругова діаграма** — розподіл по категоріях\n"
-            "Показує, скільки відсотків від загальної суми\n"
-            "складає кожна категорія витрат або доходів\n\n"
-            "� **Стовпчастий графік** — порівняння сум\n"
-            "Наглядне порівняння доходів та витрат\n"
-            "за обраний період у вигляді стовпців\n\n"
-            "Після вибору типу графіку ви зможете обрати період 📅"
+            "📊 **Візуалізація ваших фінансів**\n\n"
+            "Оберіть тип діаграми для аналізу:\n\n"
+            "🍩 **Кругова діаграма**\n"
+            "• Розподіл витрат по категоріях\n"
+            "• Наочно показує де найбільше трат\n"
+            "• Відсотки та суми для кожної категорії\n\n"
+            "📊 **Стовпчастий графік**\n"
+            "• Порівняння доходів та витрат\n"
+            "• Динаміка змін за період\n"
+            "• Детальний аналіз трендів\n\n"
+            "� *Після вибору діаграми оберете період для аналізу*"
         )
         
         keyboard = [
             [
-                InlineKeyboardButton("🥧 Кругова діаграма", callback_data="chart_type_pie"),
-                InlineKeyboardButton("� Стовпчастий графік", callback_data="chart_type_bar")
+                InlineKeyboardButton("🍩 Кругова діаграма", callback_data="chart_type_pie"),
+                InlineKeyboardButton("📊 Стовпчастий", callback_data="chart_type_bar")
             ],
             [
-                InlineKeyboardButton("🔙 До аналітики", callback_data="analytics")
+                InlineKeyboardButton("◀️ Аналітика", callback_data="analytics")
             ]
         ]
         
@@ -1951,7 +1948,7 @@ async def show_analytics_charts(query, context):
         logger.error(f"Error in show_analytics_charts: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при завантаженні графіків",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
         )
 
 async def show_analytics_insights_simple(query, context):
@@ -1970,7 +1967,7 @@ async def show_analytics_insights_simple(query, context):
         if not transactions:
             await query.edit_message_text(
                 "📭 Недостатньо даних для аналізу.\n\nДодайте кілька транзакцій, щоб отримати корисні поради.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
             )
             return
         
@@ -2038,7 +2035,7 @@ async def show_analytics_insights_simple(query, context):
                 InlineKeyboardButton("📊 Графіки", callback_data="analytics_charts")
             ],
             [
-                InlineKeyboardButton("🔙 До аналітики", callback_data="analytics")
+                InlineKeyboardButton("◀️ До аналітики", callback_data="analytics")
             ]
         ]
         
@@ -2052,7 +2049,7 @@ async def show_analytics_insights_simple(query, context):
         logger.error(f"Error in show_analytics_insights_simple: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при генерації порад",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
         )
 
 async def show_analytics_forecast(query, context):
@@ -2073,7 +2070,7 @@ async def show_analytics_forecast(query, context):
         if len(expense_transactions) < 7:
             await query.edit_message_text(
                 "📭 Недостатньо даних для прогнозу.\n\nДодайте більше транзакцій (мінімум 7) для отримання прогнозу.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
             )
             return
         
@@ -2108,8 +2105,7 @@ async def show_analytics_forecast(query, context):
             trend_emoji = "📊"
         
         text = "🔮 **Прогноз витрат**\n\n"
-        text += f"📊 *Поточний тренд:* Витрати {trend}\n"
-        text += f"💭 {trend_desc}\n\n"
+        text += f"📊 *Поточний тренд:* Витрати {trend}\n\n"
         
         text += "📈 **Прогнози:**\n"
         text += f"📅 На наступний тиждень: `{weekly_forecast:.2f} грн`\n"
@@ -2138,7 +2134,7 @@ async def show_analytics_forecast(query, context):
                 InlineKeyboardButton("📊 Графіки", callback_data="analytics_charts")
             ],
             [
-                InlineKeyboardButton("🔙 До аналітики", callback_data="analytics")
+                InlineKeyboardButton("◀️ До аналітики", callback_data="analytics")
             ]
         ]
         
@@ -2152,7 +2148,7 @@ async def show_analytics_forecast(query, context):
         logger.error(f"Error in show_analytics_forecast: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при створенні прогнозу",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
         )
 
 async def show_chart_data_type_selection(query, context, chart_type):
@@ -2161,17 +2157,28 @@ async def show_chart_data_type_selection(query, context, chart_type):
         # Зберігаємо тип графіку в контексті
         context.user_data['selected_chart_type'] = chart_type
         
-        chart_name = "Кругова діаграма" if chart_type == "pie" else "Стовпчастий графік"
+        chart_name = "🍩 Кругової діаграми" if chart_type == "pie" else "📊 Стовпчастого графіку"
         
-        text = (
-            f"📊 **{chart_name}**\n\n"
-            "Оберіть тип даних для відображення:\n\n"
-            "💸 **Витрати** — розподіл ваших трат по категоріях\n"
-            "💰 **Доходи** — розподіл ваших доходів по джерелах\n"
-        )
-        
-        if chart_type == "bar":
-            text += "📊 **Порівняння** — доходи та витрати разом\n"
+        if chart_type == "pie":
+            text = (
+                f"📊 **Налаштування {chart_name}**\n\n"
+                "Що ви хочете проаналізувати?\n\n"
+                "💸 **Витрати** — де найбільше трат?\n"
+                "• Покаже топ категорій витрат\n"
+                "• Відсотки та суми для кожної категорії\n\n"
+                "💰 **Доходи** — звідки надходять кошти?\n"
+                "• Структура ваших джерел доходу\n"
+                "• Розподіл по типах надходжень\n\n"
+                "👆 *Оберіть тип аналізу*"
+            )
+        else:
+            text = (
+                f"📊 **Налаштування {chart_name}**\n\n"
+                "Оберіть тип даних для відображення:\n\n"
+                "💸 **Витрати** — розподіл ваших трат по категоріях\n"
+                "💰 **Доходи** — розподіл ваших доходів по джерелах\n"
+                "📊 **Порівняння** — доходи та витрати разом\n"
+            )
         
         keyboard = [
             [
@@ -2183,7 +2190,7 @@ async def show_chart_data_type_selection(query, context, chart_type):
         if chart_type == "bar":
             keyboard.insert(1, [InlineKeyboardButton("📊 Порівняння", callback_data=f"chart_data_comparison_{chart_type}")])
         
-        keyboard.append([InlineKeyboardButton("🔙 До графіків", callback_data="analytics_charts")])
+        keyboard.append([InlineKeyboardButton("◀️ До графіків", callback_data="analytics_charts")])
         
         await query.edit_message_text(
             text=text,
@@ -2195,7 +2202,7 @@ async def show_chart_data_type_selection(query, context, chart_type):
         logger.error(f"Error in show_chart_data_type_selection: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при завантаженні меню",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics_charts")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_charts")]])
         )
 
 async def show_chart_period_selection(query, context, chart_type, data_type):
@@ -2204,34 +2211,48 @@ async def show_chart_period_selection(query, context, chart_type, data_type):
         # Зберігаємо тип даних в контексті
         context.user_data['selected_data_type'] = data_type
         
-        chart_name = "Кругова діаграма" if chart_type == "pie" else "Стовпчастий графік"
+        chart_name = "🍩 Кругової діаграми" if chart_type == "pie" else "📊 Стовпчастого графіку"
         data_name = {
-            "expenses": "Витрати",
-            "income": "Доходи", 
-            "comparison": "Порівняння"
+            "expenses": "💸 Витрати",
+            "income": "💰 Доходи", 
+            "comparison": "📊 Порівняння"
         }.get(data_type, "Дані")
         
-        text = (
-            f"📊 **{chart_name} - {data_name}**\n\n"
-            "Оберіть період для аналізу:\n\n"
-            "📅 **Місяць** — останні 30 днів\n"
-            "📆 **Тиждень** — останні 7 днів\n"
-            "🗓 **День** — сьогодні\n\n"
-            "Після вибору періоду буде створено графік 📈"
-        )
+        if chart_type == "pie":
+            text = (
+                f"📊 **Період для {chart_name}**\n\n"
+                f"Аналіз: {data_name}\n\n"
+                "За який період створити діаграму?\n\n"
+                "📅 **Місяць** — найповніша картина\n"
+                "• Всі категорії за 30 днів\n\n"
+                "📆 **Тиждень** — поточні тренди\n"
+                "• Актуальні витрати за 7 днів\n\n"
+                " *Рекомендуємо 'Місяць' для повного аналізу*"
+            )
+        else:
+            text = (
+                f"📊 **{chart_name} - {data_name}**\n\n"
+                "Оберіть період для аналізу:\n\n"
+                "📅 **Місяць** — останні 30 днів\n"
+                "📆 **Тиждень** — останні 7 днів\n\n"
+                "Після вибору періоду буде створено графік 📈"
+            )
         
         keyboard = [
             [
                 InlineKeyboardButton("📅 Місяць", callback_data=f"generate_chart_{chart_type}_{data_type}_month"),
                 InlineKeyboardButton("📆 Тиждень", callback_data=f"generate_chart_{chart_type}_{data_type}_week")
-            ],
-            [
-                InlineKeyboardButton("🗓 День", callback_data=f"generate_chart_{chart_type}_{data_type}_day")
-            ],
-            [
-                InlineKeyboardButton("🔙 До типу даних", callback_data=f"chart_type_{chart_type}")
             ]
         ]
+        
+        # Логіка кнопки "Назад" залежить від типу графіку
+        if chart_type == "bar":
+            # Для стовпчастих графіків — назад до вибору графіків (оскільки ми пропускаємо вибір типу даних)
+            keyboard.append([InlineKeyboardButton("◀️ До графіків", callback_data="analytics_charts")])
+        else:
+            # Для кругових діаграм — назад до вибору типу даних
+            keyboard.append([InlineKeyboardButton("◀️ До типу даних", callback_data=f"chart_type_{chart_type}")])
+        
         
         await query.edit_message_text(
             text=text,
@@ -2243,7 +2264,7 @@ async def show_chart_period_selection(query, context, chart_type, data_type):
         logger.error(f"Error in show_chart_period_selection: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при завантаженні меню",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics_charts")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_charts")]])
         )
 
 async def generate_simple_chart(query, context, chart_type, data_type, period):
@@ -2256,11 +2277,8 @@ async def generate_simple_chart(query, context, chart_type, data_type, period):
         
         # Визначаємо період
         now = datetime.now()
-        if period == "day":
-            start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            period_name = "Сьогодні"
-        elif period == "week":
-            start_date = now - timedelta(days=7)
+        if period == "week":
+            start_date = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
             period_name = "Останні 7 днів"
         else:  # month
             start_date = now - timedelta(days=30)
@@ -2275,7 +2293,7 @@ async def generate_simple_chart(query, context, chart_type, data_type, period):
                 "Додайте транзакції для створення графіків.",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("➕ Додати транзакцію", callback_data="add_transaction")],
-                    [InlineKeyboardButton("🔙 До графіків", callback_data="analytics_charts")]
+                    [InlineKeyboardButton("◀️ До графіків", callback_data="analytics_charts")]
                 ])
             )
             return
@@ -2304,8 +2322,8 @@ async def generate_simple_chart(query, context, chart_type, data_type, period):
                 f"📊 Немає {data_name} за період: {period_name}\n\n"
                 "Спробуйте інший період або додайте транзакції.",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 До періодів", callback_data=f"chart_data_{data_type}_{chart_type}")],
-                    [InlineKeyboardButton("🔙 До графіків", callback_data="analytics_charts")]
+                    [InlineKeyboardButton("◀️ До періодів", callback_data=f"chart_data_{data_type}_{chart_type}")],
+                    [InlineKeyboardButton("◀️ До графіків", callback_data="analytics_charts")]
                 ])
             )
             return
@@ -2317,19 +2335,45 @@ async def generate_simple_chart(query, context, chart_type, data_type, period):
             else:  # bar
                 chart_buffer = await create_bar_chart(transactions, data_type, chart_title, period)
             
+            # Створюємо підпис для діаграми
+            if chart_type == "pie":
+                # Розрахуємо деякі цікаві факти для кругової діаграми
+                total_amount = sum(abs(t.amount) for t in filtered_transactions)
+                num_categories = len(set(t.category.name if t.category else "Без категорії" for t in filtered_transactions))
+                
+                if data_type == "expenses":
+                    caption_text = (
+                        f"🍩 **Аналіз витрат за {period_name.lower()}**\n\n"
+                        f"💰 Загальна сума: **{total_amount:,.0f} грн**\n"
+                        f"🏷️ Категорій: **{num_categories}**\n"
+                        f"📊 Транзакцій: **{len(filtered_transactions)}**\n\n"
+                        f"💡 *Найбільші сектори показують основні статті витрат*"
+                    )
+                else:  # income
+                    caption_text = (
+                        f"🍩 **Аналіз доходів за {period_name.lower()}**\n\n"
+                        f"💰 Загальна сума: **{total_amount:,.0f} грн**\n"
+                        f"🏷️ Джерел: **{num_categories}**\n"
+                        f"📊 Надходжень: **{len(filtered_transactions)}**\n\n"
+                        f"💡 *Діаграма показує структуру ваших доходів*"
+                    )
+            else:
+                caption_text = (
+                    f"📊 **{chart_title}**\n\n"
+                    f"📈 Графік створено на основі {len(filtered_transactions) if data_type != 'comparison' else len(transactions)} транзакцій"
+                )
+            
             # Відправляємо графік
             await context.bot.send_photo(
                 chat_id=query.message.chat_id,
                 photo=chart_buffer,
-                caption=f"📊 **{chart_title}**\n\n"
-                       f"📈 Графік створено на основі {len(filtered_transactions) if data_type != 'comparison' else len(transactions)} транзакцій",
+                caption=caption_text,
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
                     [
-                        InlineKeyboardButton("🔄 Інший період", callback_data=f"chart_data_{data_type}_{chart_type}"),
-                        InlineKeyboardButton("📊 Інший графік", callback_data="analytics_charts")
+                        InlineKeyboardButton("🔄 Інший період", callback_data=f"chart_data_{data_type}_{chart_type}")
                     ],
-                    [InlineKeyboardButton("🔙 До аналітики", callback_data="analytics")]
+                    [InlineKeyboardButton("◀️ До вибору графіків", callback_data="analytics_charts")]
                 ])
             )
             
@@ -2339,7 +2383,7 @@ async def generate_simple_chart(query, context, chart_type, data_type, period):
                 "❌ Помилка при створенні графіку\n\n"
                 "Спробуйте ще раз або оберіть інший тип графіку.",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 До графіків", callback_data="analytics_charts")]
+                    [InlineKeyboardButton("◀️ До графіків", callback_data="analytics_charts")]
                 ])
             )
         
@@ -2347,20 +2391,24 @@ async def generate_simple_chart(query, context, chart_type, data_type, period):
         logger.error(f"Error in generate_simple_chart: {str(e)}")
         await query.edit_message_text(
             "❌ Помилка при створенні графіку",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="analytics_charts")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_charts")]])
         )
 
 async def create_pie_chart(transactions, data_type, title):
-    """Створює кругову діаграму"""
+    """Створює сучасну кругову діаграму з покращеним дизайном"""
     import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
     import io
+    
+    # Налаштовуємо українські шрифти - спрощуємо для кращої сумісності
+    plt.rcParams['font.family'] = ['DejaVu Sans', 'Arial', 'sans-serif']
     
     # Групуємо транзакції по категоріях
     category_totals = {}
     
     for transaction in transactions:
         category_name = transaction.category.name if transaction.category else "Без категорії"
-        category_totals[category_name] = category_totals.get(category_name, 0) + transaction.amount
+        category_totals[category_name] = category_totals.get(category_name, 0) + abs(transaction.amount)
     
     if not category_totals:
         raise Exception("Немає даних для створення діаграми")
@@ -2368,58 +2416,99 @@ async def create_pie_chart(transactions, data_type, title):
     # Сортуємо категорії за сумою
     sorted_categories = sorted(category_totals.items(), key=lambda x: x[1], reverse=True)
     
-    # Беремо топ-8 категорій, решту об'єднуємо в "Інше"
-    if len(sorted_categories) > 8:
-        top_categories = sorted_categories[:7]
-        other_sum = sum(amount for _, amount in sorted_categories[7:])
+    # Беремо топ-7 категорій, решту об'єднуємо в "Інше"
+    if len(sorted_categories) > 7:
+        top_categories = sorted_categories[:6]
+        other_sum = sum(amount for _, amount in sorted_categories[6:])
         if other_sum > 0:
             top_categories.append(("Інше", other_sum))
         categories, amounts = zip(*top_categories)
     else:
         categories, amounts = zip(*sorted_categories)
     
-    # Створюємо графік
-    plt.figure(figsize=(10, 8))
+    # Створюємо фігуру з правильними пропорціями - збільшуємо розмір
+    fig, ax = plt.subplots(figsize=(14, 12), facecolor='white')  # Збільшили з (12, 10) до (14, 12)
     
-    # Кольори для діаграми
-    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', 
-              '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE']
+    # Сучасна кольорова палітра
+    modern_colors = [
+        '#FF6B8A',  # Рожевий
+        '#4ECDC4',  # Бірюзовий  
+        '#45B7D1',  # Блакитний
+        '#96CEB4',  # М'ятний
+        '#FECA57',  # Жовтий
+        '#A55EEA',  # Фіолетовий
+        '#26D0CE',  # Аквамарин
+        '#FF9FF3'   # Лавандовий
+    ]
     
-    # Створюємо кругову діаграму
+    # Розрахунок загальної суми
+    total_amount = sum(amounts)
+    
+    # Створюємо кругову діаграму без підписів
     wedges, texts, autotexts = plt.pie(
         amounts, 
-        labels=categories, 
-        autopct='%1.1f%%',
+        labels=None,  # Не показуємо підписи на діаграмі
+        autopct=lambda pct: f'{pct:.1f}%' if pct > 5 else '',  # Показуємо відсотки тільки для великих секторів
         startangle=90,
-        colors=colors[:len(categories)]
+        colors=modern_colors[:len(categories)],
+        wedgeprops=dict(width=0.7, edgecolor='white', linewidth=2),  # Робимо пончикову діаграму
+        pctdistance=0.85
     )
     
-    # Налаштування тексту
+    # Налаштування відсотків - збільшуємо розмір
     for autotext in autotexts:
-        autotext.set_color('white')
+        autotext.set_color('#2C3E50')
         autotext.set_fontweight('bold')
-        autotext.set_fontsize(10)
+        autotext.set_fontsize(24)  # Збільшили з 11 до 16
     
-    for text in texts:
-        text.set_fontsize(9)
+    # Додаємо центральний текст із загальною сумою
+    centre_circle = plt.Circle((0,0), 0.4, fc='white', linewidth=2, edgecolor='#E8E8E8')
+    ax.add_artist(centre_circle)
     
-    plt.title(title, fontsize=14, fontweight='bold', pad=20)
+    # Центральний текст - збільшуємо розміри
+    plt.text(0, 0.1, f'{total_amount:,.0f}', ha='center', va='center', 
+             fontsize=32, fontweight='bold', color='#2C3E50')  # Збільшили з 16 до 24
+    plt.text(0, -0.1, 'грн', ha='center', va='center', 
+             fontsize=28, color='#7F8C8D')  # Збільшили з 12 до 18
+    
+    # Створюємо красиву легенду
+    legend_elements = []
+    for i, (category, amount) in enumerate(zip(categories, amounts)):
+        percentage = (amount / total_amount) * 100
+        label = f"{category}: {amount:,.0f} грн ({percentage:.1f}%)"
+        legend_elements.append(mpatches.Patch(color=modern_colors[i], label=label))
+    
+    # Розміщуємо легенду поза діаграмою - збільшуємо розмір тексту
+    plt.legend(
+        handles=legend_elements,
+        loc='center left',
+        bbox_to_anchor=(1.1, 0.5),
+        fontsize=26,  # Збільшили з 10 до 14
+        frameon=False
+    )
+    
+    # Налаштовуємо заголовок - збільшуємо розмір
+    plt.title(title, fontsize=32, fontweight='bold', pad=30, color='#2C3E50')  # Збільшили з 16 до 20
     plt.axis('equal')
     
-    # Зберігаємо в буфер
+    # Зберігаємо в буфер з покращеними налаштуваннями
     buffer = io.BytesIO()
     plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight', 
-                facecolor='white', edgecolor='none')
+                facecolor='white', edgecolor='none', pad_inches=0.3)
     buffer.seek(0)
     plt.close()
     
     return buffer
 
 async def create_bar_chart(transactions, data_type, title, period):
-    """Створює стовпчастий графік"""
+    """Створює сучасний стовпчастий графік з покращеним дизайном"""
     import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
     import io
     from collections import defaultdict
+    
+    # Налаштовуємо українські шрифти
+    plt.rcParams['font.family'] = ['DejaVu Sans', 'Arial', 'sans-serif']
     
     if data_type == "comparison":
         # Групуємо доходи та витрати по періодах
@@ -2427,12 +2516,15 @@ async def create_bar_chart(transactions, data_type, title, period):
         expense_data = defaultdict(float)
         
         for transaction in transactions:
-            if period == "day":
-                key = transaction.transaction_date.strftime("%H:00")
-            elif period == "week":
-                key = transaction.transaction_date.strftime("%a")
+            if period == "week":
+                # Для тижня показуємо останні 7 днів з правильними днями тижня
+                weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд']
+                weekday_name = weekdays[transaction.transaction_date.weekday()]
+                key = f"{weekday_name} ({transaction.transaction_date.strftime('%d.%m')})"
             else:  # month
-                key = transaction.transaction_date.strftime("%d.%m")
+                # Для місяця показуємо по тижнях
+                week_number = (transaction.transaction_date.day - 1) // 7 + 1
+                key = f"Тиждень {week_number}"
             
             if transaction.type == TransactionType.INCOME:
                 income_data[key] += transaction.amount
@@ -2440,25 +2532,84 @@ async def create_bar_chart(transactions, data_type, title, period):
                 expense_data[key] += transaction.amount
         
         # Підготовка даних для графіку
-        all_keys = sorted(set(list(income_data.keys()) + list(expense_data.keys())))
+        if period == "week":
+            # Для тижня створюємо ключі для останніх 7 днів з правильними днями тижня
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            all_keys = []
+            
+            for i in range(6, -1, -1):  # від 6 днів тому до сьогодні
+                date = now - timedelta(days=i)
+                weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд']
+                weekday_name = weekdays[date.weekday()]
+                key = f"{weekday_name} ({date.strftime('%d.%m')})"
+                all_keys.append(key)
+        else:  # month
+            all_keys = [f"Тиждень {i}" for i in range(1, 5)]
         
-        incomes = [income_data.get(key, 0) for key in all_keys]
-        expenses = [expense_data.get(key, 0) for key in all_keys]
+        # Фільтруємо тільки ті ключі, де є дані
+        filtered_keys = [key for key in all_keys if income_data[key] > 0 or expense_data[key] > 0]
+        if not filtered_keys:
+            filtered_keys = all_keys  # Показуємо всі, навіть якщо немає даних
         
-        # Створюємо графік
-        plt.figure(figsize=(12, 8))
-        x = range(len(all_keys))
+        incomes = [income_data.get(key, 0) for key in filtered_keys]
+        expenses = [expense_data.get(key, 0) for key in filtered_keys]
+        
+        # Створюємо сучасний графік - збільшуємо розмір
+        fig, ax = plt.subplots(figsize=(14, 10), facecolor='white')
+        
+        x = range(len(filtered_keys))
         width = 0.35
         
-        plt.bar([i - width/2 for i in x], incomes, width, label='Доходи', color='#4ECDC4')
-        plt.bar([i + width/2 for i in x], expenses, width, label='Витрати', color='#FF6B6B')
+        # Сучасні кольори
+        income_color = '#4ECDC4'  # Бірюзовий для доходів
+        expense_color = '#FF6B8A'  # Рожевий для витрат
         
-        plt.xlabel('Період')
-        plt.ylabel('Сума (грн)')
-        plt.title(title, fontweight='bold')
-        plt.xticks(x, all_keys, rotation=45)
-        plt.legend()
-        plt.grid(True, alpha=0.3)
+        # Створюємо стовпці з покращеним дизайном
+        bars1 = ax.bar([i - width/2 for i in x], incomes, width, 
+                      label='💰 Доходи', color=income_color, 
+                      edgecolor='white', linewidth=2, alpha=0.9)
+        bars2 = ax.bar([i + width/2 for i in x], expenses, width, 
+                      label='💸 Витрати', color=expense_color, 
+                      edgecolor='white', linewidth=2, alpha=0.9)
+        
+        # Додаємо значення на стовпці з великими шрифтами
+        for bar, amount in zip(bars1, incomes):
+            if amount > 0:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height + max(incomes + expenses)*0.01,
+                       f'{amount:,.0f}', ha='center', va='bottom', 
+                       fontweight='bold', fontsize=16, color='#2C3E50')
+        
+        for bar, amount in zip(bars2, expenses):
+            if amount > 0:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height + max(incomes + expenses)*0.01,
+                       f'{amount:,.0f}', ha='center', va='bottom', 
+                       fontweight='bold', fontsize=16, color='#2C3E50')
+        
+        # Налаштовуємо осі з великими шрифтами
+        ax.set_xlabel('Період', fontsize=24, fontweight='bold', color='#2C3E50')
+        ax.set_ylabel('Сума (грн)', fontsize=24, fontweight='bold', color='#2C3E50')
+        ax.set_title(title, fontsize=28, fontweight='bold', pad=30, color='#2C3E50')
+        
+        # Налаштовуємо мітки осей
+        ax.set_xticks(x)
+        ax.set_xticklabels(filtered_keys, fontsize=20, rotation=0 if len(filtered_keys) <= 4 else 45)
+        ax.tick_params(axis='y', labelsize=18)
+        
+        # Створюємо красиву легенду
+        ax.legend(fontsize=22, loc='upper left', frameon=True, 
+                 fancybox=True, shadow=True, framealpha=0.9)
+        
+        # Додаємо сітку
+        ax.grid(True, alpha=0.3, axis='y', linestyle='--', linewidth=1)
+        ax.set_axisbelow(True)
+        
+        # Встановлюємо межі осей
+        max_value = max(max(incomes) if incomes else [0], max(expenses) if expenses else [0])
+        if max_value > 0:
+            ax.set_ylim(0, max_value * 1.15)
         
     else:
         # Стовпчастий графік по категоріях
@@ -2466,7 +2617,7 @@ async def create_bar_chart(transactions, data_type, title, period):
         
         for transaction in transactions:
             category_name = transaction.category.name if transaction.category else "Без категорії"
-            category_totals[category_name] = category_totals.get(category_name, 0) + transaction.amount
+            category_totals[category_name] = category_totals.get(category_name, 0) + abs(transaction.amount)
         
         if not category_totals:
             raise Exception("Немає даних для створення графіку")
@@ -2474,35 +2625,67 @@ async def create_bar_chart(transactions, data_type, title, period):
         # Сортуємо категорії за сумою
         sorted_categories = sorted(category_totals.items(), key=lambda x: x[1], reverse=True)
         
-        # Беремо топ-10 категорій
-        if len(sorted_categories) > 10:
-            sorted_categories = sorted_categories[:10]
+        # Беремо топ-8 категорій для кращого відображення
+        if len(sorted_categories) > 8:
+            top_categories = sorted_categories[:7]
+            other_sum = sum(amount for _, amount in sorted_categories[7:])
+            if other_sum > 0:
+                top_categories.append(("Інше", other_sum))
+            sorted_categories = top_categories
         
         categories, amounts = zip(*sorted_categories)
         
-        # Створюємо графік
-        plt.figure(figsize=(12, 8))
+        # Створюємо сучасний графік - збільшуємо розмір
+        fig, ax = plt.subplots(figsize=(14, 10), facecolor='white')
         
-        color = '#FF6B6B' if data_type == "expenses" else '#4ECDC4'
-        bars = plt.bar(range(len(categories)), amounts, color=color)
+        # Вибираємо колір залежно від типу даних
+        if data_type == "expenses":
+            colors = ['#FF6B8A', '#FF8A9B', '#FFA8AB', '#FFC7BB', '#FFE5CB']
+            main_color = '#FF6B8A'
+        else:  # income
+            colors = ['#4ECDC4', '#6DD5C7', '#8BDDCA', '#A9E5CE', '#C7EDD1']
+            main_color = '#4ECDC4'
         
-        # Додаємо значення на стовпці
+        # Розширюємо палітру при потребі
+        while len(colors) < len(categories):
+            colors.extend(colors)
+        
+        # Створюємо стовпці з градієнтом кольорів
+        bars = ax.bar(range(len(categories)), amounts, 
+                     color=colors[:len(categories)], 
+                     edgecolor='white', linewidth=2, alpha=0.9)
+        
+        # Додаємо значення на стовпці з великими шрифтами
         for bar, amount in zip(bars, amounts):
             height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2., height + height*0.01,
-                    f'{amount:.0f}', ha='center', va='bottom', fontweight='bold')
+            ax.text(bar.get_x() + bar.get_width()/2., height + max(amounts)*0.01,
+                   f'{amount:,.0f}', ha='center', va='bottom', 
+                   fontweight='bold', fontsize=16, color='#2C3E50')
         
-        plt.xlabel('Категорії')
-        plt.ylabel('Сума (грн)')
-        plt.title(title, fontweight='bold')
-        plt.xticks(range(len(categories)), categories, rotation=45, ha='right')
-        plt.grid(True, alpha=0.3, axis='y')
+        # Налаштовуємо осі з великими шрифтами
+        ax.set_xlabel('Категорії', fontsize=24, fontweight='bold', color='#2C3E50')
+        ax.set_ylabel('Сума (грн)', fontsize=24, fontweight='bold', color='#2C3E50')
+        ax.set_title(title, fontsize=28, fontweight='bold', pad=30, color='#2C3E50')
+        
+        # Налаштовуємо мітки категорій
+        ax.set_xticks(range(len(categories)))
+        ax.set_xticklabels(categories, fontsize=18, rotation=45, ha='right')
+        ax.tick_params(axis='y', labelsize=18)
+        
+        # Додаємо сітку
+        ax.grid(True, alpha=0.3, axis='y', linestyle='--', linewidth=1)
+        ax.set_axisbelow(True)
+        
+        # Встановлюємо межі осей
+        ax.set_ylim(0, max(amounts) * 1.15)
     
-    # Зберігаємо в буфер
-    buffer = io.BytesIO()
+    # Покращуємо загальний вигляд
     plt.tight_layout()
+    
+    # Зберігаємо в буфер з високою якістю
+    buffer = io.BytesIO()
     plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight', 
-                facecolor='white', edgecolor='none')
+                facecolor='white', edgecolor='none', pad_inches=0.3)
     buffer.seek(0)
     plt.close()
     
@@ -2568,14 +2751,13 @@ async def generate_pdf_report(query, context):
             parse_mode="Markdown"
         )
         
-        # Показуємо меню після відправки
+        # Показуємо меню після відправки - БЕЗ кнопки "Новий звіт"
         keyboard = [
             [
-                InlineKeyboardButton("🔄 Новий звіт", callback_data="generate_pdf_report"),
-                InlineKeyboardButton("📊 До аналітики", callback_data="analytics")
+                InlineKeyboardButton("� До аналітики", callback_data="analytics"),
             ],
             [
-                InlineKeyboardButton("🔙 Головне меню", callback_data="back_to_main")
+                InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")
             ]
         ]
         
@@ -2600,145 +2782,303 @@ async def generate_pdf_report(query, context):
             "Спробуйте ще раз або зверніться до підтримки.",
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔄 Спробувати знову", callback_data="generate_pdf_report"),
-                InlineKeyboardButton("🔙 Назад", callback_data="analytics")
+                InlineKeyboardButton("◀️ Назад", callback_data="analytics")
             ]])
         )
 
 def create_pdf_report(user, transactions, stats):
-    """Створює PDF документ з фінансовим звітом"""
+    """Створює сучасний PDF документ з фінансовим звітом з підтримкою кирилиці"""
     try:
         from reportlab.lib.pagesizes import letter, A4
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle, PageBreak, KeepTogether
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import inch
+        from reportlab.lib.units import inch, mm
         from reportlab.lib import colors
         from reportlab.pdfgen import canvas
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
         import io
         
         # Створюємо буфер для PDF
         buffer = io.BytesIO()
         
-        # Створюємо документ
-        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*inch)
+        # Реєструємо шрифт DejaVu для підтримки кирилиці
+        try:
+            import os
+            from reportlab.pdfbase.pdfmetrics import registerFontFamily
+            
+            # Шлях до наших локальних шрифтів
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            font_dir = os.path.join(base_dir, 'fonts')
+            
+            regular_font_path = os.path.join(font_dir, 'DejaVuSans.ttf')
+            bold_font_path = os.path.join(font_dir, 'DejaVuSans-Bold.ttf')
+            
+            if os.path.exists(regular_font_path):
+                # Реєструємо основний шрифт
+                pdfmetrics.registerFont(TTFont('DejaVuSans', regular_font_path))
+                
+                # Реєструємо жирний варіант, якщо він є
+                if os.path.exists(bold_font_path):
+                    pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', bold_font_path))
+                    # Реєструємо сім'ю шрифтів
+                    registerFontFamily('DejaVuSans', normal='DejaVuSans', bold='DejaVuSans-Bold')
+                
+                font_name = 'DejaVuSans'
+                logger.info(f"Successfully registered DejaVu Sans font from {regular_font_path}")
+            else:
+                # Fallback - використовуємо стандартний шрифт
+                font_name = 'Helvetica'
+                logger.warning(f"DejaVu Sans font not found at {regular_font_path}, using Helvetica")
+                
+        except Exception as e:
+            font_name = 'Helvetica'
+            logger.error(f"Error registering font: {str(e)}")
+        
+        # Створюємо документ з кращими налаштуваннями
+        doc = SimpleDocTemplate(
+            buffer, 
+            pagesize=A4,
+            rightMargin=20*mm,
+            leftMargin=20*mm,
+            topMargin=25*mm,
+            bottomMargin=20*mm
+        )
         story = []
         
-        # Стилі
+        # Сучасні стилі з підтримкою кирилиці
         styles = getSampleStyleSheet()
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=24,
-            textColor=colors.HexColor('#2E4B9B'),
-            alignment=TA_CENTER,
-            spaceAfter=30
-        )
         
-        subtitle_style = ParagraphStyle(
-            'CustomSubtitle',
-            parent=styles['Heading2'],
-            fontSize=18,
-            textColor=colors.HexColor('#4A4A4A'),
-            spaceBefore=20,
-            spaceAfter=10
-        )
-        
-        body_style = ParagraphStyle(
-            'CustomBody',
-            parent=styles['Normal'],
-            fontSize=12,
-            textColor=colors.HexColor('#333333'),
-            spaceAfter=8
-        )
+        # Визначаємо жирний шрифт
+        bold_font_name = 'DejaVuSans-Bold' if font_name == 'DejaVuSans' else font_name
         
         # Заголовок
-        title = Paragraph("📊 Персональний фінансовий звіт", title_style)
-        story.append(title)
-        
-        # Інформація про період та користувача
-        period_info = Paragraph(
-            f"<b>Період:</b> {datetime.now().strftime('%d.%m.%Y')} (останні {stats['period']})<br/>"
-            f"<b>Користувач:</b> {user.username or f'ID: {user.telegram_id}'}<br/>"
-            f"<b>Дата створення:</b> {datetime.now().strftime('%d.%m.%Y %H:%M')}",
-            body_style
+        title_style = ParagraphStyle(
+            'ModernTitle',
+            parent=styles['Title'],
+            fontName=bold_font_name,
+            fontSize=28,
+            textColor=colors.HexColor('#1e3a8a'),  # Глибокий синій
+            alignment=TA_CENTER,
+            spaceBefore=10,
+            spaceAfter=30,
+            leading=36
         )
-        story.append(period_info)
+        
+        # Підзаголовки
+        section_style = ParagraphStyle(
+            'ModernSection',
+            parent=styles['Heading2'],
+            fontName=bold_font_name,
+            fontSize=16,
+            textColor=colors.HexColor('#059669'),  # Зелений
+            spaceBefore=20,
+            spaceAfter=12,
+            borderWidth=0,
+            borderColor=colors.HexColor('#d1fae5'),
+            borderPadding=8,
+            backColor=colors.HexColor('#f0fdf4')
+        )
+        
+        # Основний текст
+        body_style = ParagraphStyle(
+            'ModernBody',
+            parent=styles['Normal'],
+            fontName=font_name,
+            fontSize=11,
+            textColor=colors.HexColor('#374151'),  # Темно-сірий
+            spaceAfter=8,
+            alignment=TA_JUSTIFY,
+            leading=16
+        )
+        
+        # Стиль для важливої інформації
+        highlight_style = ParagraphStyle(
+            'Highlight',
+            parent=body_style,
+            backColor=colors.HexColor('#fef3c7'),  # Жовтий фон
+            borderWidth=1,
+            borderColor=colors.HexColor('#f59e0b'),
+            borderPadding=12,
+            spaceBefore=12,
+            spaceAfter=12,
+            leading=16
+        )
+        
+        # ЗАГОЛОВОК ЗВІТУ
+        story.append(Paragraph("ПЕРСОНАЛЬНИЙ ФІНАНСОВИЙ ЗВІТ", title_style))
+        
+        # Інформаційний блок
+        current_date = datetime.now()
+        info_text = f"""
+        <b>Період аналізу:</b> останні {stats['period']}<br/>
+        <b>Користувач:</b> {user.username or f'ID: {user.telegram_id}'}<br/>
+        <b>Дата створення:</b> {current_date.strftime('%d.%m.%Y о %H:%M')}<br/>
+        <b>Валюта:</b> українська гривня (грн)
+        """
+        story.append(Paragraph(info_text, body_style))
         story.append(Spacer(1, 20))
         
-        # Основні показники
-        story.append(Paragraph("💰 Основні фінансові показники", subtitle_style))
+        # ОСНОВНІ ПОКАЗНИКИ
+        story.append(Paragraph("ФІНАНСОВИЙ ПІДСУМОК", section_style))
         
-        main_stats_data = [
-            ['Показник', 'Сума (грн)', 'Статус'],
-            ['Доходи', f"{stats['total_income']:.2f}", '💵'],
-            ['Витрати', f"{stats['total_expenses']:.2f}", '💸'],
-            ['Баланс', f"{stats['balance']:+.2f}", '💼'],
-            ['Середньо на день', f"{stats['total_expenses']/30:.2f}", '📅']
-        ]
-        
-        main_table = Table(main_stats_data, colWidths=[2*inch, 1.5*inch, 1*inch])
-        main_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4A90E2')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ]))
-        story.append(main_table)
-        story.append(Spacer(1, 20))
-        
-        # Аналіз заощаджень
-        story.append(Paragraph("💾 Аналіз заощаджень", subtitle_style))
-        
+        # Розрахунок додаткових метрик
+        daily_avg = stats['total_expenses'] / 30
         savings_rate = ((stats['total_income'] - stats['total_expenses']) / stats['total_income'] * 100) if stats['total_income'] > 0 else 0
         
-        if savings_rate >= 20:
-            savings_text = f"🎉 Відмінно! Ви заощаджуєте {savings_rate:.1f}% доходу"
-            recommendation = "Це дуже хороший показник для фінансової стабільності."
-        elif savings_rate >= 10:
-            savings_text = f"👍 Добре! Заощадження складають {savings_rate:.1f}%"
-            recommendation = "Спробуйте збільшити до 20% для кращої безпеки."
-        elif savings_rate >= 0:
-            savings_text = f"📊 Заощадження: {savings_rate:.1f}% від доходу"
-            recommendation = "Рекомендуємо збільшити заощадження до 10-20%."
-        else:
-            savings_text = f"🚨 Увага! Перевитрата на {abs(savings_rate):.1f}%"
-            recommendation = "Потрібно негайно переглянути витрати та зменшити їх."
+        # Таблиця основних показників з сучасним дизайном
+        main_data = [
+            ['ПОКАЗНИК', 'СУМА', 'ДЕТАЛІ'],
+            ['Загальні доходи', f"{stats['total_income']:,.2f} грн", 'За період'],
+            ['Загальні витрати', f"{stats['total_expenses']:,.2f} грн", f"≈ {daily_avg:.0f} грн/день"],
+            ['Чистий результат', f"{stats['balance']:+,.2f} грн", f"{'Профіцит' if stats['balance'] >= 0 else 'Дефіцит'}"],
+            ['Коефіцієнт заощаджень', f"{savings_rate:.1f}%", f"{'Відмінно' if savings_rate >= 20 else 'Потрібно покращити' if savings_rate < 10 else 'Непогано'}"]
+        ]
         
-        savings_info = Paragraph(f"{savings_text}<br/>{recommendation}", body_style)
-        story.append(savings_info)
+        main_table = Table(main_data, colWidths=[55*mm, 40*mm, 60*mm])
+        main_table.setStyle(TableStyle([
+            # Заголовок
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e40af')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), bold_font_name),
+            ('FONTSIZE', (0, 0), (-1, 0), 11),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            
+            # Дані
+            ('FONTNAME', (0, 1), (-1, -1), font_name),
+            ('FONTSIZE', (0, 1), (-1, -1), 12),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')]),
+            ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
+            ('ALIGN', (2, 1), (2, -1), 'LEFT'),
+            ('TOPPADDING', (0, 1), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+            
+            # Сітка
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#e5e7eb')),
+            ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#1e40af')),
+            # Запобігання розриву таблиці
+            ('SPLITLONGWORDS', (0, 0), (-1, -1), True),
+        ]))
+        
+        # Додаємо таблицю з запобіганням розриву
+        main_table.hAlign = 'CENTER'
+        story.append(KeepTogether([main_table]))
         story.append(Spacer(1, 20))
         
-        # Топ категорії витрат
+        # АНАЛІЗ ЗАОЩАДЖЕНЬ
+        savings_section = []
+        savings_section.append(Paragraph("Аналіз ваших заощаджень", section_style))
+        
+        if savings_rate >= 20:
+            savings_analysis = f"""
+            <b>Чудові результати!</b><br/>
+            Ви заощаджуєте <b>{savings_rate:.1f}%</b> від вашого доходу. Це відмінний показник, який свідчить про високий рівень фінансової дисципліни.<br/><br/>
+            <b>Порівняння з рекомендаціями:</b><br/>
+            • Мінімальний рівень заощаджень: 10% [ВИКОНАНО]<br/>
+            • Оптимальний рівень: 20% [ВИКОНАНО]<br/>
+            • Ваш результат: {savings_rate:.1f}% [ВІДМІННО]<br/>
+            """
+        elif savings_rate >= 10:
+            savings_analysis = f"""
+            <b>Хороший початок!</b><br/>
+            Ви заощаджуєте <b>{savings_rate:.1f}%</b> від доходу. Це хороший результат, але є простір для покращення.<br/><br/>
+            <b>Поради для росту:</b><br/>
+            • Поточний рівень: {savings_rate:.1f}% [ВИКОНАНО]<br/>
+            • Ціль: 20% [ЦІЛЬ]<br/>
+            • Потрібно збільшити на: {20-savings_rate:.1f}%<br/>
+            """
+        elif savings_rate >= 0:
+            savings_analysis = f"""
+            <b>Потрібна увага</b><br/>
+            Заощадження складають лише <b>{savings_rate:.1f}%</b> від доходу. Це нижче рекомендованого рівня.<br/><br/>
+            <b>План дій:</b><br/>
+            • Поточний рівень: {savings_rate:.1f}% [НИЗЬКИЙ]<br/>
+            • Мінімальна ціль: 10% [ЦІЛЬ]<br/>
+            • Оптимальна ціль: 20% [ІДЕАЛ]<br/>
+            """
+        else:
+            deficit_amount = abs(stats['balance'])
+            savings_analysis = f"""
+            <b>КРИТИЧНА СИТУАЦІЯ!</b><br/>
+            Витрати перевищують доходи на <b>{deficit_amount:,.2f} грн</b> ({abs(savings_rate):.1f}%).<br/><br/>
+            <b>ТЕРМІНОВІ ДІЇ:</b><br/>
+            • Негайно переглянути всі витрати<br/>
+            • Скоротити необов'язкові витрати<br/>
+            • Знайти додаткові джерела доходу<br/>
+            """
+        
+        savings_section.append(Paragraph(savings_analysis, highlight_style))
+        story.append(KeepTogether(savings_section))
+        story.append(Spacer(1, 15))
+        
+        # АНАЛІЗ КАТЕГОРІЙ ВИТРАТ
         if stats['category_expenses']:
-            story.append(Paragraph("🎯 Топ категорії витрат", subtitle_style))
+            story.append(Paragraph("СТРУКТУРА ВАШИХ ВИТРАТ", section_style))
             
             sorted_categories = sorted(stats['category_expenses'].items(), key=lambda x: x[1], reverse=True)
-            category_data = [['Категорія', 'Сума (грн)', 'Відсоток']]
             
-            for category, amount in sorted_categories[:5]:
+            # Таблиця топ-5 категорій
+            category_data = [['КАТЕГОРІЯ', 'СУМА', 'ЧАСТКА', 'ОЦІНКА']]
+            
+            for i, (category, amount) in enumerate(sorted_categories[:5]):
                 percentage = (amount / stats['total_expenses'] * 100) if stats['total_expenses'] > 0 else 0
-                category_data.append([category, f"{amount:.2f}", f"{percentage:.1f}%"])
+                
+                if percentage > 40:
+                    evaluation = "Занадто багато"
+                elif percentage > 25:
+                    evaluation = "Помірно"
+                elif percentage > 15:
+                    evaluation = "Нормально"
+                else:
+                    evaluation = "Добре"
+                
+                category_data.append([
+                    f"{i+1}. {category}",
+                    f"{amount:,.2f} грн",
+                    f"{percentage:.1f}%",
+                    evaluation
+                ])
             
-            category_table = Table(category_data, colWidths=[2.5*inch, 1.5*inch, 1*inch])
+            category_table = Table(category_data, colWidths=[45*mm, 25*mm, 18*mm, 30*mm])
             category_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E74C3C')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 12),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                # Заголовок
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#dc2626')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), bold_font_name),
+                ('FONTSIZE', (0, 0), (-1, 0), 11),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+                
+                # Дані
+                ('FONTNAME', (0, 1), (-1, -1), font_name),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fef2f2')]),
+                ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+                ('ALIGN', (1, 1), (2, -1), 'RIGHT'),
+                ('ALIGN', (3, 1), (3, -1), 'CENTER'),
+                ('TOPPADDING', (0, 1), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+                
+                # Сітка
+                ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#f3f4f6')),
+                ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#dc2626')),
+                # Запобігання розриву таблиці
+                ('SPLITLONGWORDS', (0, 0), (-1, -1), True),
             ]))
-            story.append(category_table)
-            story.append(Spacer(1, 20))
+            
+            # Центруємо таблицю і додаємо з запобіганням розриву
+            category_table.hAlign = 'CENTER'
+            story.append(KeepTogether([category_table]))
+            story.append(Spacer(1, 15))
         
-        # Персональні рекомендації
-        story.append(Paragraph("💡 Персональні рекомендації", subtitle_style))
+        # ПЕРСОНАЛЬНІ РЕКОМЕНДАЦІЇ
+        recommendations_section = []
+        recommendations_section.append(Paragraph("ПЕРСОНАЛЬНІ РЕКОМЕНДАЦІЇ", section_style))
         
         recommendations = []
         
@@ -2748,38 +3088,59 @@ def create_pdf_report(user, transactions, stats):
             top_percentage = (top_category[1] / stats['total_expenses'] * 100) if stats['total_expenses'] > 0 else 0
             
             if top_percentage > 40:
-                recommendations.append(f"⚠️ Категорія '{top_category[0]}' займає {top_percentage:.1f}% бюджету - це забагато. Спробуйте оптимізувати витрати в цій категорії.")
+                recommendations.append(f"<b>Оптимізація витрат:</b> Категорія '{top_category[0]}' займає {top_percentage:.1f}% бюджету. Спробуйте зменшити витрати тут на 10-15%.")
             elif top_percentage > 25:
-                recommendations.append(f"📊 Категорія '{top_category[0]}' складає {top_percentage:.1f}% витрат - це помірна концентрація.")
+                recommendations.append(f"<b>Контроль категорії:</b> '{top_category[0]}' складає {top_percentage:.1f}% витрат - слідкуйте за цією категорією.")
             else:
-                recommendations.append(f"✅ У вас збалансований розподіл витрат по категоріях.")
+                recommendations.append("<b>Збалансованість:</b> У вас добрий розподіл витрат по категоріях.")
+        
+        # Поради по заощадженням
+        if savings_rate < 0:
+            recommendations.append("<b>Термінова дія:</b> Скоротіть витрати на 20-30% найближчим часом.")
+        elif savings_rate < 10:
+            recommendations.append("<b>Ціль заощаджень:</b> Спробуйте досягти рівня 10% заощаджень від доходу.")
+        elif savings_rate < 20:
+            recommendations.append("<b>Покращення:</b> Чудово! Тепер ціль - 20% заощаджень.")
+        
+        # Планування бюджету
+        weekly_budget = daily_avg * 7
+        monthly_budget = daily_avg * 30
+        recommendations.append(f"<b>Планування:</b> Ваш поточний ритм витрат: {daily_avg:.0f} грн/день, {weekly_budget:.0f} грн/тиждень.")
         
         # Загальні поради
-        if savings_rate < 0:
-            recommendations.append("🚨 Негайно потрібно скоротити витрати")
-        elif savings_rate < 10:
-            recommendations.append("📈 Є потенціал для збільшення заощаджень - встановіть ціль 10-20%.")
-        
-        daily_budget = stats['total_expenses'] / 30
-        weekly_budget = daily_budget * 7
-        recommendations.append(f"📅 Ваш середній денний бюджет: {daily_budget:.0f} грн, тижневий: {weekly_budget:.0f} грн.")
-        
-        recommendations.append("💡 Регулярно відстежуйте витрати та аналізуйте тренди для кращого контролю фінансів.")
+        recommendations.append("<b>Регулярність:</b> Перевіряйте статистику щотижня для кращого контролю.")
+        recommendations.append("<b>Цілі:</b> Встановіть конкретні цілі заощаджень на наступний місяць.")
         
         for i, rec in enumerate(recommendations, 1):
-            rec_text = Paragraph(f"{i}. {rec}", body_style)
-            story.append(rec_text)
+            rec_paragraph = Paragraph(f"{i}. {rec}", body_style)
+            recommendations_section.append(rec_paragraph)
+            recommendations_section.append(Spacer(1, 4))
         
-        story.append(Spacer(1, 30))
+        story.append(KeepTogether(recommendations_section))
+        story.append(Spacer(1, 20))
         
-        # Підвал
-        footer = Paragraph(
-            "Цей звіт створено автоматично FinAssistAI Bot<br/>"
-            "Для отримання актуальної інформації використовуйте функції бота.",
-            ParagraphStyle('Footer', parent=styles['Normal'], fontSize=10, 
-                         textColor=colors.grey, alignment=TA_CENTER)
+        # ПІДВАЛ ДОКУМЕНТУ
+        footer_style = ParagraphStyle(
+            'Footer',
+            parent=styles['Normal'],
+            fontName=font_name,
+            fontSize=9,
+            textColor=colors.HexColor('#6b7280'),
+            alignment=TA_CENTER,
+            spaceBefore=20,
+            borderWidth=1,
+            borderColor=colors.HexColor('#e5e7eb'),
+            borderPadding=8,
+            backColor=colors.HexColor('#f9fafb')
         )
-        story.append(footer)
+        
+        footer_text = f"""
+        <b>FinAssistAI Bot</b> | Розумний фінансовий помічник<br/>
+        Звіт створено автоматично • {current_date.strftime('%d.%m.%Y о %H:%M')}<br/>
+        Використовуйте функції бота для отримання актуальної інформації
+        """
+        
+        story.append(Paragraph(footer_text, footer_style))
         
         # Створюємо PDF
         doc.build(story)
@@ -2787,64 +3148,100 @@ def create_pdf_report(user, transactions, stats):
         
         return buffer
         
-    except ImportError:
-        # Якщо reportlab не встановлений, створюємо простий текстовий звіт
+    except ImportError as e:
+        logger.error(f"ReportLab not available: {str(e)}")
+        # Якщо reportlab не встановлений, створюємо покращений текстовий звіт
         return create_simple_text_report(user, transactions, stats)
     except Exception as e:
         logger.error(f"Error creating PDF report: {str(e)}")
         return create_simple_text_report(user, transactions, stats)
 
 def create_simple_text_report(user, transactions, stats):
-    """Створює простий текстовий звіт як fallback"""
+    """Створює покращений текстовий звіт як fallback"""
     buffer = io.BytesIO()
     
-    report_text = f"""
-📊 ПЕРСОНАЛЬНИЙ ФІНАНСОВИЙ ЗВІТ
-{'='*50}
-
-👤 Користувач: {user.username or f'ID: {user.telegram_id}'}
-📅 Період: останні {stats['period']}
-🕐 Створено: {datetime.now().strftime('%d.%m.%Y %H:%M')}
-
-{'='*50}
-💰 ОСНОВНІ ПОКАЗНИКИ
-{'='*50}
-
-💵 Доходи:         {stats['total_income']:.2f} грн
-💸 Витрати:        {stats['total_expenses']:.2f} грн
-💼 Баланс:         {stats['balance']:+.2f} грн
-📅 Середньо/день:  {stats['total_expenses']/30:.2f} грн
-
-{'='*50}
-💾 АНАЛІЗ ЗАОЩАДЖЕНЬ
-{'='*50}
-
-""" 
-    
+    current_date = datetime.now()
     savings_rate = ((stats['total_income'] - stats['total_expenses']) / stats['total_income'] * 100) if stats['total_income'] > 0 else 0
+    daily_avg = stats['total_expenses'] / 30
     
+    report_text = f"""
+┌─────────────────────────────────────────────────────────────┐
+│               ПЕРСОНАЛЬНИЙ ФІНАНСОВИЙ ЗВІТ                  │
+└─────────────────────────────────────────────────────────────┘
+
+Користувач: {user.username or f'ID: {user.telegram_id}'}
+Період аналізу: останні {stats['period']}
+Створено: {current_date.strftime('%d.%m.%Y о %H:%M')}
+Валюта: українська гривня (грн)
+
+┌─────────────────────────────────────────────────────────────┐
+│                    ФІНАНСОВИЙ ПІДСУМОК                      │
+└─────────────────────────────────────────────────────────────┘
+
+Загальні доходи:      {stats['total_income']:>12,.2f} грн
+Загальні витрати:     {stats['total_expenses']:>12,.2f} грн
+Чистий результат:     {stats['balance']:>+12,.2f} грн
+Середньо на день:     {daily_avg:>12,.0f} грн
+
+┌─────────────────────────────────────────────────────────────┐
+│                      АНАЛІЗ ЗАОЩАДЖЕНЬ                      │
+└─────────────────────────────────────────────────────────────┘
+
+Коефіцієнт заощаджень: {savings_rate:>6.1f}%
+
+"""
+
     if savings_rate >= 20:
-        report_text += f"🎉 Відмінно! Ви заощаджуєте {savings_rate:.1f}% доходу\n"
-        report_text += "Це дуже хороший показник для фінансової стабільності.\n"
+        report_text += "ЧУДОВІ РЕЗУЛЬТАТИ!\n"
+        report_text += f"Ви заощаджуєте {savings_rate:.1f}% від доходу - це відмінний показник!\n"
+        report_text += "Високий рівень фінансової дисципліни. Так тримати!\n"
     elif savings_rate >= 10:
-        report_text += f"👍 Добре! Заощадження складають {savings_rate:.1f}%\n"
-        report_text += "Спробуйте збільшити до 20% для кращої безпеки.\n"
+        report_text += "ХОРОШИЙ ПОЧАТОК!\n"
+        report_text += f"Заощадження {savings_rate:.1f}% - це добре, але є простір для росту.\n"
+        report_text += f"Ціль: збільшити до 20% (потрібно +{20-savings_rate:.1f}%)\n"
     elif savings_rate >= 0:
-        report_text += f"📊 Заощадження: {savings_rate:.1f}% від доходу\n"
-        report_text += "Рекомендуємо збільшити заощадження до 10-20%.\n"
+        report_text += "ПОТРІБНА УВАГА!\n"
+        report_text += f"Заощадження лише {savings_rate:.1f}% - нижче рекомендованого.\n"
+        report_text += "Рекомендовано: мінімум 10%, оптимально 20%\n"
     else:
-        report_text += f"🚨 Увага! Перевитрата на {abs(savings_rate):.1f}%\n"
-        report_text += "Потрібно негайно переглянути витрати та зменшити їх.\n"
-    
+        deficit_amount = abs(stats['balance'])
+        report_text += "КРИТИЧНА СИТУАЦІЯ!\n"
+        report_text += f"Дефіцит {deficit_amount:,.2f} грн ({abs(savings_rate):.1f}%)\n"
+        report_text += "Потрібні термінові дії для балансування бюджету!\n"
+
     if stats['category_expenses']:
-        report_text += f"\n{'='*50}\n🎯 ТОП КАТЕГОРІЇ ВИТРАТ\n{'='*50}\n\n"
+        report_text += f"\n┌─────────────────────────────────────────────────────────────┐\n"
+        report_text += f"│                  СТРУКТУРА ВИТРАТ                          │\n"
+        report_text += f"└─────────────────────────────────────────────────────────────┘\n\n"
         
         sorted_categories = sorted(stats['category_expenses'].items(), key=lambda x: x[1], reverse=True)
+        
+        report_text += "┌─────┬─────────────────────────┬────────────┬─────────┬──────────┐\n"
+        report_text += "│  №  │       Категорія         │    Сума    │ Частка  │  Оцінка  │\n"
+        report_text += "├─────┼─────────────────────────┼────────────┼─────────┼──────────┤\n"
+        
         for i, (category, amount) in enumerate(sorted_categories[:5], 1):
             percentage = (amount / stats['total_expenses'] * 100) if stats['total_expenses'] > 0 else 0
-            report_text += f"{i}. {category:<20} {amount:>8.2f} грн ({percentage:>5.1f}%)\n"
+            
+            if percentage > 40:
+                evaluation = " Багато"
+            elif percentage > 25:
+                evaluation = " Помірно"
+            elif percentage > 15:
+                evaluation = " Норма"
+            else:
+                evaluation = " Добре"
+            
+            # Обрізаємо довгі назви категорій
+            display_category = category[:22] + "..." if len(category) > 22 else category
+            
+            report_text += f"│ {i:>2}. │ {display_category:<23} │ {amount:>8,.0f} │ {percentage:>5.1f}% │{evaluation:<9} │\n"
+        
+        report_text += "└─────┴─────────────────────────┴────────────┴─────────┴──────────┘\n"
     
-    report_text += f"\n{'='*50}\n💡 ПЕРСОНАЛЬНІ РЕКОМЕНДАЦІЇ\n{'='*50}\n\n"
+    report_text += f"\n┌─────────────────────────────────────────────────────────────┐\n"
+    report_text += f"│                ПЕРСОНАЛЬНІ РЕКОМЕНДАЦІЇ                     │\n"
+    report_text += f"└─────────────────────────────────────────────────────────────┘\n\n"
     
     recommendations = []
     
@@ -2854,26 +3251,35 @@ def create_simple_text_report(user, transactions, stats):
         top_percentage = (top_category[1] / stats['total_expenses'] * 100) if stats['total_expenses'] > 0 else 0
         
         if top_percentage > 40:
-            recommendations.append(f"⚠️ Категорія '{top_category[0]}' займає {top_percentage:.1f}% бюджету")
+            recommendations.append(f"Оптимізація: '{top_category[0]}' займає {top_percentage:.1f}% бюджету")
         elif top_percentage > 25:
-            recommendations.append(f"📊 Помірна концентрація в категорії '{top_category[0]}'")
+            recommendations.append(f"Контроль: '{top_category[0]}' - {top_percentage:.1f}% витрат")
         else:
-            recommendations.append(f"✅ Збалансований розподіл витрат")
+            recommendations.append("Збалансованість: добрий розподіл по категоріях")
     
+    # Поради по заощадженням
     if savings_rate < 0:
-        recommendations.append("🚨 Негайно потрібно скоротити витрати")
+        recommendations.append("Термінова дія: скоротити витрати на 20-30%")
     elif savings_rate < 10:
-        recommendations.append("📈 Збільшити заощадження до 10-20%")
+        recommendations.append("Ціль: досягти 10% заощаджень від доходу")
+    elif savings_rate < 20:
+        recommendations.append("Покращення: наступна ціль - 20% заощаджень")
     
-    daily_budget = stats['total_expenses'] / 30
-    recommendations.append(f"📅 Планувати ~{daily_budget:.0f} грн на день")
+    # Планування
+    weekly_budget = daily_avg * 7
+    recommendations.append(f"Планування: {daily_avg:.0f} грн/день, {weekly_budget:.0f} грн/тиждень")
+    
+    # Загальні поради
+    recommendations.append("Регулярність: перевіряйте статистику щотижня")
+    recommendations.append("Цілі: встановіть конкретні цілі на наступний місяць")
     
     for i, rec in enumerate(recommendations, 1):
         report_text += f"{i}. {rec}\n"
     
-    report_text += f"\n{'='*50}\n"
-    report_text += "Звіт створено FinAssistAI Bot\n"
-    report_text += f"{'='*50}\n"
+    report_text += f"\n┌─────────────────────────────────────────────────────────────┐\n"
+    report_text += f"│ FinAssistAI Bot | Розумний фінансовий помічник              │\n"
+    report_text += f"│ Звіт створено автоматично • {current_date.strftime('%d.%m.%Y о %H:%M'):>27} │\n"
+    report_text += f"└─────────────────────────────────────────────────────────────┘\n"
     
     buffer.write(report_text.encode('utf-8'))
     buffer.seek(0)
