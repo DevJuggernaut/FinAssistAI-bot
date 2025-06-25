@@ -35,6 +35,7 @@
 2. Підключіть ваш GitHub репозиторій
 3. Використайте наступні налаштування:
    - **Environment**: `Python 3`
+   - **Python Version**: `3.13.4`
    - **Build Command**: `pip install -r requirements.txt`
    - **Start Command**: `python bot.py`
 

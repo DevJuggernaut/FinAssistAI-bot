@@ -2,13 +2,15 @@
 
 ## ✅ Підготовка файлів (Виконано)
 
-- [x] `render.yaml` - конфігурація для Render
+- [x] `render.yaml` - конфігурація для Render (Python 3.13.4)
 - [x] `Procfile` - альтернативна конфігурація запуску
-- [x] `requirements.txt` - оптимізовано для продакшену
-- [x] `Dockerfile` - оновлено для безпечного деплою
+- [x] `requirements.txt` - оптимізовано для Python 3.13.4
+- [x] `runtime.txt` - специфікація Python 3.13.4
+- [x] `Dockerfile` - оновлено для Python 3.13
 - [x] `.env.example` - приклад змінних середовища
 - [x] `DEPLOYMENT.md` - повний посібник з деплою
 - [x] `health_server.py` - health check для Render
+- [x] `test_python313_compatibility.sh` - тестування сумісності
 - [x] Оновлено `config.py` та `database/config.py` для підтримки DATABASE_URL
 - [x] Оптимізовано `database/session.py` для продакшену
 
