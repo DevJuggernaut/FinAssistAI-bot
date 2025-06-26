@@ -191,7 +191,7 @@ async def show_my_budget_overview(query, context):
     message += f"{diff_emoji} {diff_text}\n\n"
     
     # =============== ЦЕНТРАЛЬНА ЧАСТИНА: ОСТАННІ ТРАНЗАКЦІЇ ===============
-    message += "� *ОСТАННІ ОПЕРАЦІЇ*\n"
+    message += "📋 *ОСТАННІ ОПЕРАЦІЇ*\n"
     
     # Отримуємо останні 7 транзакцій
     recent_transactions = get_transactions(user.id, limit=7)

@@ -10,6 +10,7 @@ TRUNCATE TABLE financial_advices CASCADE;
 TRUNCATE TABLE category_budgets CASCADE;
 TRUNCATE TABLE budget_plans CASCADE;
 TRUNCATE TABLE transactions CASCADE;
+TRUNCATE TABLE accounts CASCADE;  -- Додано очищення рахунків
 
 -- Delete user-specific categories but leave default categories
 DELETE FROM categories WHERE is_default = FALSE;
@@ -27,6 +28,7 @@ ALTER SEQUENCE transactions_id_seq RESTART WITH 1;
 ALTER SEQUENCE budget_plans_id_seq RESTART WITH 1;
 ALTER SEQUENCE category_budgets_id_seq RESTART WITH 1;
 ALTER SEQUENCE financial_advices_id_seq RESTART WITH 1;
+ALTER SEQUENCE accounts_id_seq RESTART WITH 1;  -- Додано ресет лічильника рахунків
 
 -- Display confirmation message (will only appear when running in psql client)
 \echo 'All data has been cleaned from the finance_bot database, preserving only default categories';

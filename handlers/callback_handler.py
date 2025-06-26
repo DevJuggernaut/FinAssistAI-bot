@@ -39,7 +39,7 @@ from handlers.transaction_handler import (
     show_period_filter_menu, show_type_filter_menu,
     handle_edit_single_transaction, handle_edit_amount, handle_edit_description,
     handle_edit_category, handle_set_category, handle_delete_transaction, handle_confirm_delete,
-    handle_view_single_transaction
+    handle_view_single_transaction, handle_edit_date, handle_set_date, handle_edit_type, handle_set_type, handle_confirm_type_change
 )
 from handlers.placeholder_handlers import (
     show_help_menu, show_reports_menu, show_charts_menu,
@@ -97,6 +97,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         callback_data = query.data
+        logging.info(f"CALLBACK_HANDLER: received callback_data: {callback_data}")
         
         # Основні функції
         if callback_data == "stats" or callback_data == "show_stats":
@@ -160,18 +161,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif callback_data == "accounts_use_default_name":
             from handlers.accounts_handler import use_default_account_name
             await use_default_account_name(query, context)
-        elif callback_data == "accounts_balance_zero":
-            from handlers.accounts_handler import set_zero_balance
-            await set_zero_balance(query, context)
-        elif callback_data == "accounts_balance_1000":
-            from handlers.accounts_handler import set_balance_1000
-            await set_balance_1000(query, context)
-        elif callback_data == "accounts_balance_5000":
-            from handlers.accounts_handler import set_balance_5000
-            await set_balance_5000(query, context)
-        elif callback_data == "accounts_balance_10000":
-            from handlers.accounts_handler import set_balance_10000
-            await set_balance_10000(query, context)
+
         elif callback_data == "accounts_edit_name":
             from handlers.accounts_handler import show_account_name_input
             await show_account_name_input(query, context)
@@ -187,13 +177,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from_account_id = int(parts[2])
             to_account_id = int(parts[3])
             await show_transfer_amount_input(query, context, from_account_id, to_account_id)
-        elif callback_data.startswith("transfer_amount_"):
-            from handlers.accounts_handler import execute_transfer
-            parts = callback_data.split("_")
-            from_account_id = int(parts[2])
-            to_account_id = int(parts[3])
-            amount = float(parts[4])
-            await execute_transfer(query, context, from_account_id, to_account_id, amount)
+
         
         # Аналітичні функції - нова система
         elif callback_data == "analytics_expense_stats":
@@ -881,9 +865,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Ручне додавання транзакцій
         elif callback_data == "manual_expense":
-            await show_enhanced_expense_form(query, context)
+            from handlers.transaction_handler import show_account_selection
+            await show_account_selection(query, context, "expense")
         elif callback_data == "manual_income":
-            await show_enhanced_income_form(query, context)
+            from handlers.transaction_handler import show_account_selection
+            await show_account_selection(query, context, "income")
         
         # Обробка автоматичної категоризації
         elif callback_data == "confirm_auto_category":
@@ -898,6 +884,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif callback_data == "cancel_transaction":
             from handlers.transaction_handler import handle_cancel_transaction
             await handle_cancel_transaction(query, context)
+        elif callback_data.startswith("select_account_"):
+            from handlers.transaction_handler import handle_account_selection
+            await handle_account_selection(query, context)
+        elif callback_data == "create_account":
+            from handlers.accounts_handler import show_accounts_menu
+            await show_accounts_menu(query, context)
         
         # Вибір категорій та сум
         elif callback_data.startswith("expense_cat_") or callback_data.startswith("income_cat_"):
@@ -947,8 +939,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("❌ PDF файли більше не підтримуються для ПриватБанку. Будь ласка, використовуйте Excel формат.", show_alert=True)
             await show_privatbank_statement_form(query, context)
         elif callback_data == "monobank_csv_guide":
+            context.user_data['file_source'] = 'monobank'
             await show_upload_csv_guide(query, context)
         elif callback_data == "monobank_pdf_guide":
+            context.user_data['file_source'] = 'monobank'
             await show_monobank_pdf_guide(query, context)
         elif callback_data == "start_excel_upload":
             # Визначаємо джерело файлу (якщо не встановлено, використовуємо ПриватБанк за замовчуванням)
@@ -1023,6 +1017,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ])
             )
         elif callback_data == "monobank_excel_guide":
+            context.user_data['file_source'] = 'monobank'
             await show_monobank_excel_guide(query, context)
         elif callback_data == "start_monobank_excel_upload":
             # Set context that we're expecting an Excel file from Monobank
@@ -1230,10 +1225,21 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await handle_edit_amount(query, context)
         elif callback_data.startswith("edit_description_"):
             await handle_edit_description(query, context)
-        elif callback_data.startswith("edit_category_"):
+        elif callback_data.startswith("change_category_"):
             await handle_edit_category(query, context)
+        elif callback_data.startswith("edit_date_"):
+            await handle_edit_date(query, context)
         elif callback_data.startswith("set_category_"):
             await handle_set_category(query, context)
+        elif callback_data.startswith("set_date_"):
+            await handle_set_date(query, context)
+        elif callback_data.startswith("edit_type_"):
+            await handle_edit_type(query, context)
+        elif callback_data.startswith("set_type_"):
+            await handle_set_type(query, context)
+        elif callback_data.startswith("confirm_type_change_"):
+            logging.info(f"CALLBACK_HANDLER: confirm_type_change detected, calling handle_confirm_type_change")
+            await handle_confirm_type_change(query, context)
         elif callback_data.startswith("delete_transaction_"):
             await handle_delete_transaction(query, context)
         elif callback_data.startswith("confirm_delete_"):

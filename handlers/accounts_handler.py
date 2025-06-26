@@ -204,7 +204,7 @@ async def show_account_transfer(query, context):
             for account in available_accounts:
                 balance_text = f"{account.balance:,.2f} {currency_symbol}"
                 message += f"{account.icon} **{account.name}**\n"
-                message += f"   � `{balance_text}`\n\n"
+                message += f"   💰 `{balance_text}`\n\n"
             
             # Створюємо кнопки для вибору рахунку-джерела
             keyboard = []
@@ -308,47 +308,12 @@ async def show_transfer_amount_input(query, context, from_account_id, to_account
     message += "• `1000` — одна тисяча\n"
     message += "• `500.50` — з копійками\n"
     message += f"• `{from_account.balance:,.0f}` — весь баланс\n\n"
-    message += f"👆 *Максимум: {from_account.balance:,.2f} {currency_symbol}*"
+    message += f"👆 *Максимум: {from_account.balance:,.2f} {currency_symbol}*\n\n"
+    message += "✍️ **Напишіть суму в наступному повідомленні**"
     
-    # Швидкі кнопки для популярних сум
-    quick_amounts = []
-    max_balance = from_account.balance
-    
-    # Додаємо кнопки для частин від балансу
-    if max_balance >= 100:
-        if max_balance >= 1000:
-            quick_amounts.extend([100, 500, 1000])
-        elif max_balance >= 500:
-            quick_amounts.extend([100, 500])
-        else:
-            quick_amounts.append(100)
-    
-    # Додаємо кнопку для половини балансу
-    if max_balance >= 20:
-        half_balance = max_balance / 2
-        quick_amounts.append(half_balance)
-    
-    # Додаємо кнопку для всього балансу
-    quick_amounts.append(max_balance)
-    
-    keyboard = []
-    
-    # Створюємо кнопки для швидких сум (по 2 в ряду)
-    for i in range(0, len(quick_amounts), 2):
-        row = []
-        for j in range(i, min(i + 2, len(quick_amounts))):
-            amount = quick_amounts[j]
-            if amount == max_balance:
-                button_text = f"💰 Весь баланс ({amount:,.0f})"
-            elif amount == max_balance / 2:
-                button_text = f"💰 Половина ({amount:,.0f})"
-            else:
-                button_text = f"💰 {amount:,.0f}"
-            callback_data = f"transfer_amount_{from_account_id}_{to_account_id}_{amount}"
-            row.append(InlineKeyboardButton(button_text, callback_data=callback_data))
-        keyboard.append(row)
-    
-    keyboard.append([InlineKeyboardButton("◀️ Вибір призначення", callback_data=f"transfer_from_{from_account_id}")])
+    keyboard = [
+        [InlineKeyboardButton("◀️ Вибір призначення", callback_data=f"transfer_from_{from_account_id}")]
+    ]
     
     # Зберігаємо дані переказу в контексті
     context.user_data['transfer_data'] = {
@@ -581,17 +546,9 @@ async def show_account_balance_input(query, context):
     message += "• `5000` — п'ять тисяч\n"
     message += "• `12500.50` — з копійками\n"
     message += "• `0` — порожній рахунок\n\n"
-    message += f"👆 *Введіть суму в {currency_symbol} або натисніть '0' для пустого рахунку*"
+    message += f"✍️ **Напишіть суму в наступному повідомленні**"
     
     keyboard = [
-        [
-            InlineKeyboardButton("0️⃣ Порожній (0)", callback_data="accounts_balance_zero"),
-        ],
-        [
-            InlineKeyboardButton("💰 1000", callback_data="accounts_balance_1000"),
-            InlineKeyboardButton("💰 5000", callback_data="accounts_balance_5000"),
-            InlineKeyboardButton("💰 10000", callback_data="accounts_balance_10000")
-        ],
         [
             InlineKeyboardButton("◀️ Назва рахунку", callback_data="accounts_edit_name"),
             InlineKeyboardButton("❌ Скасувати", callback_data="accounts_menu")
@@ -607,31 +564,7 @@ async def show_account_balance_input(query, context):
     # Зберігаємо стан очікування введення балансу
     context.user_data['awaiting_account_balance'] = True
 
-async def set_zero_balance(query, context):
-    """Встановлює нульовий баланс для рахунку"""
-    account_data = context.user_data.get('account_creation', {})
-    account_name = account_data.get('name', 'Новий рахунок')
-    
-    # Створюємо рахунок з нульовим балансом
-    await create_account_with_balance(query, context, account_name, 0.0)
 
-async def set_balance_1000(query, context):
-    """Встановлює баланс 1000 для рахунку"""
-    account_data = context.user_data.get('account_creation', {})
-    account_name = account_data.get('name', 'Новий рахунок')
-    await create_account_with_balance(query, context, account_name, 1000.0)
-
-async def set_balance_5000(query, context):
-    """Встановлює баланс 5000 для рахунку"""
-    account_data = context.user_data.get('account_creation', {})
-    account_name = account_data.get('name', 'Новий рахунок')
-    await create_account_with_balance(query, context, account_name, 5000.0)
-
-async def set_balance_10000(query, context):
-    """Встановлює баланс 10000 для рахунку"""
-    account_data = context.user_data.get('account_creation', {})
-    account_name = account_data.get('name', 'Новий рахунок')
-    await create_account_with_balance(query, context, account_name, 10000.0)
 
 async def create_account_with_balance(query, context, account_name, balance):
     """Створює рахунок з вказаною назвою та балансом"""
@@ -721,8 +654,12 @@ async def create_account_with_balance(query, context, account_name, balance):
 # Функція для обробки введення тексту (буде викликана в text_handler)
 async def handle_account_text_input(message, context):
     """Обробляє введення тексту користувачем для рахунків"""
+    logger.info(f"handle_account_text_input called with text: '{message.text}'")
+    logger.info(f"Context user_data: {context.user_data}")
+    
     # Обробка введення назви рахунку
     if context.user_data.get('awaiting_account_name'):
+        logger.info("Processing as account name input")
         account_name = message.text.strip()
         
         # Перевірка довжини назви
@@ -785,6 +722,7 @@ async def handle_account_text_input(message, context):
     
     # Обробка введення балансу рахунку
     elif context.user_data.get('awaiting_account_balance'):
+        logger.info("Processing as account balance input")
         balance_text = message.text.strip()
         
         try:

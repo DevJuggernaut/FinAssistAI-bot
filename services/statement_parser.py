@@ -301,12 +301,17 @@ class StatementParser:
                                     # Тип транзакції
                                     transaction_type = 'expense' if amount < 0 else 'income'
                                     
-                                    # Додаємо транзакцію
+                                    # Автоматична категоризація буде виконана пізніше з категоріями користувача
+                                    # Поки що залишаємо категорію порожньою
+                                    category = None
+                                    
+                                    # Додаємо транзакцію зі збереженням правильного знаку суми
                                     transaction = {
                                         'date': date_value.strftime('%Y-%m-%d'),
-                                        'amount': abs(amount),
+                                        'amount': amount,  # Зберігаємо оригінальний знак
                                         'description': description,
                                         'type': transaction_type,
+                                        'category': category,
                                         'source': 'PrivatBank'
                                     }
                                     
@@ -394,12 +399,12 @@ class StatementParser:
                     # У Приватбанку витрати вказуються зі знаком "-"
                     transaction_type = 'expense' if amount < 0 else 'income'
                     
-                    # Визначаємо категорію
-                    category = self._suggest_category(description, transaction_type)
+                    # Автоматична категоризація буде виконана пізніше з категоріями користувача
+                    category = None
                     
                     transaction = {
                         'date': date_value,
-                        'amount': abs(amount),
+                        'amount': amount,  # Зберігаємо оригінальний знак
                         'description': description,
                         'type': transaction_type,
                         'category': category,
@@ -550,20 +555,75 @@ class StatementParser:
     
     def _parse_text_transactions(self, text: str) -> List[Dict]:
         """
-        Парсинг транзакцій з неструктурованого тексту
+        Парсинг транзакцій з неструктурованого тексту (покращений для Monobank)
         """
         transactions = []
         lines = text.split('\n')
         
-        # Паттерни для пошуку транзакцій
+        # Паттерни для пошуку транзакцій (розширені для Monobank)
         date_pattern = r'\b\d{1,2}[./]\d{1,2}[./]\d{2,4}\b'
-        amount_pattern = r'\b\d+[.,]\d{2}\b'
+        time_pattern = r'\b\d{1,2}:\d{2}(:\d{2})?\b'
+        amount_pattern = r'[-+]?\b\d+[.,]\d{2}\b'
+        
+        # Спеціальні паттерни для Monobank
+        monobank_line_pattern = r'(\d{2}\.\d{2}\.\d{4})\s+(\d{2}:\d{2}:\d{2})?.*?([+-]?\d+[.,]\d{2})\s*(UAH|грн)?'
         
         for line in lines:
             line = line.strip()
             if not line:
                 continue
             
+            # Спробуємо спочатку Monobank паттерн
+            monobank_match = re.search(monobank_line_pattern, line)
+            if monobank_match:
+                try:
+                    date_str = monobank_match.group(1)
+                    time_str = monobank_match.group(2) or "00:00:00"
+                    amount_str = monobank_match.group(3).replace(',', '.')
+                    
+                    # Парсимо дату
+                    date_obj = self._parse_date(date_str)
+                    if not date_obj:
+                        continue
+                    
+                    # Парсимо суму
+                    amount = float(amount_str)
+                    
+                    # Витягуємо опис (все між датою/часом і сумою)
+                    description = line
+                    description = re.sub(r'\d{2}\.\d{2}\.\d{4}', '', description)
+                    description = re.sub(r'\d{2}:\d{2}:\d{2}', '', description)
+                    description = re.sub(r'[+-]?\d+[.,]\d{2}\s*(UAH|грн)?', '', description)
+                    description = re.sub(r'\s+', ' ', description).strip()
+                    
+                    if not description:
+                        description = "Операція Monobank"
+                    
+                    # Визначаємо тип за контекстом
+                    transaction_type = 'expense' if amount < 0 else 'income'
+                    
+                    # Призначаємо категорію через ML категоризатор
+                    from services.ml_categorizer import transaction_categorizer
+                    category = transaction_categorizer.suggest_category_for_bank_statement(description, transaction_type)
+                    
+                    transaction = {
+                        'date': date_obj.strftime('%Y-%m-%d'),
+                        'time': time_str,
+                        'amount': abs(amount),
+                        'description': description[:200],
+                        'type': transaction_type,
+                        'category': category,
+                        'source': 'text_parsing'
+                    }
+                    
+                    transactions.append(transaction)
+                    continue
+                    
+                except Exception as e:
+                    logger.warning(f"Error parsing Monobank line: {line}, error: {str(e)}")
+                    continue
+            
+            # Якщо Monobank паттерн не спрацював, використовуємо загальний підхід
             # Шукаємо рядки, що містять і дату, і суму
             dates = re.findall(date_pattern, line)
             amounts = re.findall(amount_pattern, line)
@@ -575,7 +635,7 @@ class StatementParser:
                     amount_str = amounts[-1].replace(',', '.')
                     
                     # Парсимо дату
-                    date_obj = self._parse_date_value(date_str)
+                    date_obj = self._parse_date(date_str)
                     if not date_obj:
                         continue
                     
@@ -598,12 +658,16 @@ class StatementParser:
                     if any(word in description.lower() for word in ['зарахування', 'надходження', 'дохід', 'поповнення']):
                         transaction_type = 'income'
                     
+                    # Призначаємо категорію через ML категоризатор
+                    from services.ml_categorizer import transaction_categorizer
+                    category = transaction_categorizer.suggest_category_for_bank_statement(description, transaction_type)
+                    
                     transaction = {
                         'date': date_obj,
                         'amount': abs(amount),
                         'description': description[:200],
                         'type': transaction_type,
-                        'category': self._suggest_category(description, transaction_type)
+                        'category': category
                     }
                     
                     transactions.append(transaction)
@@ -739,12 +803,17 @@ class StatementParser:
                     if description_col is not None and not pd.isna(row[description_col]):
                         description = str(row[description_col])
                     
+                    # Призначаємо категорію через ML категоризатор
+                    from services.ml_categorizer import transaction_categorizer
+                    category = transaction_categorizer.suggest_category_for_bank_statement(description, transaction_type)
+                    
                     # Створюємо словник транзакції
                     transaction = {
                         'date': date_value.strftime('%Y-%m-%d'),
                         'amount': amount,
                         'description': description,
-                        'type': transaction_type
+                        'type': transaction_type,
+                        'category': category
                     }
                     
                     transactions.append(transaction)
@@ -916,7 +985,7 @@ class StatementParser:
                 logger.warning("Monobank CSV: Could not find required columns by name patterns")
                 columns_count = len(df.columns)
                 if columns_count >= 4:
-                    date_col = df.columns[0]  # Перша колонка - дата і час
+                    date_col = df.columns[0]  # Перша колонка - дата
                     description_col = df.columns[1] if columns_count > 1 else None  # Друга - деталі
                     amount_col = df.columns[3] if columns_count > 3 else df.columns[columns_count - 2]  # Четверта - сума
                     
@@ -963,6 +1032,10 @@ class StatementParser:
                     if description_col is not None and not pd.isna(row[description_col]):
                         description = str(row[description_col]) if not pd.isna(row[description_col]) else ""
                     
+                    # Призначаємо категорію через ML категоризатор
+                    from services.ml_categorizer import transaction_categorizer
+                    category = transaction_categorizer.suggest_category_for_bank_statement(description, transaction_type)
+                    
                     # Створюємо словник транзакції
                     transaction = {
                         'date': date_value.strftime('%Y-%m-%d'),
@@ -970,6 +1043,7 @@ class StatementParser:
                         'amount': amount,
                         'description': description,
                         'type': transaction_type,
+                        'category': category,
                         'source': 'monobank_csv'
                     }
                     
@@ -1122,6 +1196,10 @@ class StatementParser:
                                 if description_col and not pd.isna(row[description_col]):
                                     description = str(row[description_col]).strip()
                                 
+                                # Призначаємо категорію через ML категоризатор
+                                from services.ml_categorizer import transaction_categorizer
+                                category = transaction_categorizer.suggest_category_for_bank_statement(description, transaction_type)
+                                
                                 # Створюємо транзакцію
                                 transaction = {
                                     'date': date_value.strftime('%Y-%m-%d'),
@@ -1129,6 +1207,7 @@ class StatementParser:
                                     'amount': amount,
                                     'description': description,
                                     'type': transaction_type,
+                                    'category': category,
                                     'source': 'monobank_xls'
                                 }
                                 
@@ -1171,7 +1250,13 @@ class StatementParser:
                     tables = page.extract_tables()
                     
                     if not tables:
-                        logger.warning(f"No tables found on page {page_num + 1}")
+                        logger.warning(f"No tables found on page {page_num + 1}, trying text extraction")
+                        # Якщо таблиць немає, спробуємо витягти текст
+                        text = page.extract_text()
+                        if text:
+                            logger.info(f"Extracted text from page {page_num + 1}: {len(text)} characters")
+                            text_transactions = self._parse_text_transactions(text)
+                            transactions.extend(text_transactions)
                         continue
                     
                     for table_num, table in enumerate(tables):
@@ -1185,6 +1270,17 @@ class StatementParser:
                         headers = table[0] if table else []
                         logger.info(f"Table headers: {headers}")
                         
+                        # Логуємо кожен заголовок окремо для кращої діагностики
+                        for i, header in enumerate(headers):
+                            logger.info(f"Header {i}: '{header}' -> '{str(header or '').lower().strip()}'")
+                        
+                        # Логуємо перший рядок даних для розуміння структури
+                        if len(table) > 1:
+                            first_row = table[1]
+                            logger.info(f"First data row: {first_row}")
+                            for i, cell in enumerate(first_row):
+                                logger.info(f"Cell {i}: '{cell}'")
+                        
                         # Шукаємо індекси потрібних колонок
                         date_col_idx = None
                         amount_col_idx = None
@@ -1193,38 +1289,89 @@ class StatementParser:
                         for i, header in enumerate(headers):
                             header_str = str(header or '').lower().replace('\n', ' ').strip()
                             
-                            if ('дата' in header_str or 'date' in header_str) and 'час' in header_str:
+                            # Пошук колонки з датою
+                            if ('дата' in header_str or 'date' in header_str) and ('час' in header_str or 'операції' in header_str or 'time' in header_str):
                                 date_col_idx = i
                                 logger.info(f"Found date column at index {i}: {header}")
-                            elif 'деталі' in header_str or 'опис' in header_str or 'details' in header_str:
+                            # Пошук колонки з описом - розширений список ключових слів
+                            elif any(keyword in header_str for keyword in [
+                                'деталі', 'опис', 'details', 'операці', 'призначення', 'purpose', 
+                                'comment', 'коментар', 'description', 'merchant', 'торговець',
+                                'контрагент', 'назва', 'name', 'transaction', 'операція', 'operation',
+                                'мфо', 'отримувач', 'платник', 'одержувач', 'receiver', 'sender',
+                                'інформація', 'info', 'дод', 'additional', 'додатк', 'опер'
+                            ]):
                                 description_col_idx = i
                                 logger.info(f"Found description column at index {i}: {header}")
-                            elif 'сума' in header_str and 'картки' in header_str and 'uah' in header_str:
+                            # Пошук колонки з сумою транзакції (НЕ з балансом!)
+                            elif 'сума' in header_str and 'картки' in header_str and 'uah' in header_str and 'залишок' not in header_str and 'після' not in header_str:
                                 amount_col_idx = i
                                 logger.info(f"Found amount column at index {i}: {header}")
                         
-                        if date_col_idx is None or amount_col_idx is None:
-                            logger.warning(f"Essential columns not found: date={date_col_idx}, amount={amount_col_idx}")
+                        # Якщо не знайшли колонки за назвами, спробуємо за позиціями для Monobank
+                        if date_col_idx is None and len(headers) > 0:
+                            date_col_idx = 0  # Перша колонка завжди "Дата i час операції"
+                            logger.info(f"Using first column as date: {headers[0] if headers else 'N/A'}")
+                        
+                        if description_col_idx is None and len(headers) > 1:
+                            description_col_idx = 1  # Друга колонка завжди "Деталі операції"
+                            logger.info(f"Using second column as description: {headers[1] if len(headers) > 1 else 'N/A'}")
+                        
+                        if amount_col_idx is None:
+                            # Для Monobank PDF це завжди 4-та колонка (індекс 3) - "Сума в валюті картки (UAH)"
+                            if len(headers) > 3:
+                                amount_col_idx = 3
+                                logger.info(f"Using column 3 as amount (Monobank standard): {headers[3] if len(headers) > 3 else 'N/A'}")
+                            else:
+                                logger.warning("Not enough columns for Monobank format")
+                        
+                        logger.info(f"Final column mapping: date={date_col_idx}, description={description_col_idx}, amount={amount_col_idx}")
+                        
+                        if date_col_idx is None:
+                            logger.warning(f"Date column not found in table {table_num + 1}")
                             continue
+                        
+                        if amount_col_idx is None:
+                            logger.warning(f"Amount column not found in table {table_num + 1}")
+                            continue
+                        
+                        logger.info(f"Processing table with {len(table)-1} data rows")
                         
                         # Обробляємо рядки даних (пропускаємо заголовок)
                         for row_num, row in enumerate(table[1:], 1):
                             try:
-                                if not row or len(row) <= max(date_col_idx, amount_col_idx):
+                                # Перевіряємо, що рядок не порожній та має достатньо колонок
+                                if not row or len(row) == 0:
                                     continue
                                 
-                                # Витягуємо дані з рядка
-                                date_str = str(row[date_col_idx] or '').strip()
-                                amount_str = str(row[amount_col_idx] or '').strip()
-                                description_str = str(row[description_col_idx] or '').strip() if description_col_idx is not None else 'Транзакція'
+                                # Перевіряємо, що всі значення не порожні
+                                if all(not str(cell).strip() for cell in row):
+                                    continue
+                                
+                                # Витягуємо дані з рядка за індексами
+                                date_str = str(row[date_col_idx] if date_col_idx is not None and date_col_idx < len(row) else '').strip()
+                                amount_str = str(row[amount_col_idx] if amount_col_idx is not None and amount_col_idx < len(row) else '').strip()
+                                
+                                # Для Monobank PDF завжди використовуємо колонку 1 як опис (Деталі операції)
+                                description_str = ''
+                                if len(row) > 1:
+                                    description_str = str(row[1] or '').strip()  # Колонка 1 = "Деталі операції"
+                                
+                                # Якщо опис порожній, використовуємо запасний варіант
+                                if not description_str:
+                                    description_str = 'Банківська операція'
                                 
                                 # Пропускаємо порожні рядки
                                 if not date_str or not amount_str:
+                                    logger.debug(f"Skipping row {row_num}: empty date ({date_str}) or amount ({amount_str})")
                                     continue
                                 
+                                # Логуємо отримані дані для діагностики
+                                logger.debug(f"Row {row_num}: date='{date_str}', amount='{amount_str}', description='{description_str}'")
+                                
                                 # Парсимо дату та час
-                                # Формат: "19.06.2025\n14:42:15"
-                                date_time_parts = date_str.split('\n')
+                                # Monobank може мати формат "19.06.2025\n14:42:15" або просто дату
+                                date_time_parts = date_str.replace('\n', ' ').split()
                                 if len(date_time_parts) >= 2:
                                     date_part = date_time_parts[0].strip()
                                     time_part = date_time_parts[1].strip()
@@ -1235,14 +1382,33 @@ class StatementParser:
                                 
                                 # Парсимо дату
                                 try:
-                                    date_parsed = datetime.strptime(date_part, '%d.%m.%Y')
-                                except ValueError:
-                                    logger.warning(f"Cannot parse date: {date_part}")
+                                    # Спробуємо різні формати дат
+                                    date_parsed = None
+                                    for date_format in ['%d.%m.%Y', '%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y']:
+                                        try:
+                                            date_parsed = datetime.strptime(date_part, date_format)
+                                            break
+                                        except ValueError:
+                                            continue
+                                    
+                                    if not date_parsed:
+                                        # Використовуємо загальний метод парсингу дат
+                                        date_parsed = self._parse_date(date_part)
+                                        
+                                    if not date_parsed:
+                                        logger.warning(f"Cannot parse date: {date_part}")
+                                        continue
+                                        
+                                except Exception as e:
+                                    logger.warning(f"Error parsing date '{date_part}': {e}")
                                     continue
                                 
                                 # Парсимо час
                                 try:
-                                    time_parsed = datetime.strptime(time_part, '%H:%M:%S').time()
+                                    if ':' in time_part and len(time_part.split(':')) >= 2:
+                                        time_parsed = datetime.strptime(time_part, '%H:%M:%S' if time_part.count(':') == 2 else '%H:%M').time()
+                                    else:
+                                        time_parsed = datetime.strptime("00:00:00", '%H:%M:%S').time()
                                 except ValueError:
                                     logger.warning(f"Cannot parse time: {time_part}, using 00:00:00")
                                     time_parsed = datetime.strptime("00:00:00", '%H:%M:%S').time()
@@ -1251,7 +1417,6 @@ class StatementParser:
                                 transaction_datetime = datetime.combine(date_parsed.date(), time_parsed)
                                 
                                 # Парсимо суму
-                                # Очищуємо від всіх символів, крім цифр, крапки, коми та мінуса
                                 amount_clean = re.sub(r'[^\d\-\+\.\,\s]', '', amount_str)
                                 amount_clean = amount_clean.replace(' ', '').replace(',', '.')
                                 
@@ -1265,6 +1430,10 @@ class StatementParser:
                                 transaction_type = 'expense' if amount < 0 else 'income'
                                 amount = abs(amount)
                                 
+                                # Призначаємо категорію через ML категоризатор
+                                from services.ml_categorizer import transaction_categorizer
+                                category = transaction_categorizer.suggest_category_for_bank_statement(description_str, transaction_type)
+                                
                                 # Створюємо транзакцію
                                 transaction = {
                                     'date': transaction_datetime.strftime('%Y-%m-%d'),
@@ -1272,6 +1441,7 @@ class StatementParser:
                                     'amount': amount,
                                     'description': description_str,
                                     'type': transaction_type,
+                                    'category': category,
                                     'source': 'monobank_pdf',
                                     'raw_date': date_str,
                                     'raw_amount': amount_str
@@ -1282,7 +1452,6 @@ class StatementParser:
                                 
                             except Exception as e:
                                 logger.warning(f"Error processing row {row_num}: {str(e)}")
-                                logger.debug(f"Row data: {row}")
                                 continue
             
             logger.info(f"Extracted {len(transactions)} transactions from monobank PDF file")
@@ -1290,6 +1459,127 @@ class StatementParser:
         
         except Exception as e:
             logger.error(f"Error parsing monobank PDF: {str(e)}", exc_info=True)
+            raise
+
+    def _parse_privatbank_pdf(self, file_path: str) -> List[Dict]:
+        """
+        Спеціальний парсер для виписок Приватбанку у форматі PDF
+        """
+        try:
+            transactions = []
+            
+            # Використовуємо pdfplumber для читання PDF файлу
+            with pdfplumber.open(file_path) as pdf:
+                logger.info(f"Processing PrivatBank PDF with {len(pdf.pages)} pages")
+                
+                # Обробляємо кожну сторінку
+                for page_num, page in enumerate(pdf.pages):
+                    logger.info(f"Processing page {page_num + 1}")
+                    
+                    # Витягуємо таблиці з поточної сторінки
+                    tables = page.extract_tables()
+                    
+                    if not tables:
+                        # Якщо таблиць немає, спробуємо витягти текст
+                        text = page.extract_text()
+                        if text:
+                            text_transactions = self._parse_text_transactions(text)
+                            transactions.extend(text_transactions)
+                        continue
+                    
+                    for table_num, table in enumerate(tables):
+                        logger.info(f"Processing table {table_num + 1} on page {page_num + 1}")
+                        
+                        if not table or len(table) < 2:
+                            logger.warning(f"Table {table_num + 1} is empty or too small")
+                            continue
+                        
+                        # Конвертуємо таблицю в DataFrame
+                        df = pd.DataFrame(table[1:], columns=table[0])
+                        
+                        # Шукаємо індекси потрібних колонок для ПриватБанку
+                        date_col_idx = None
+                        amount_col_idx = None
+                        description_col_idx = None
+                        
+                        for i, header in enumerate(df.columns):
+                            header_str = str(header or '').lower().replace('\n', ' ').strip()
+                            
+                            if 'дата' in header_str:
+                                date_col_idx = i
+                                logger.info(f"Found date column at index {i}: {header}")
+                            elif 'опис' in header_str or 'операц' in header_str:
+                                description_col_idx = i
+                                logger.info(f"Found description column at index {i}: {header}")
+                            elif 'сума' in header_str:
+                                amount_col_idx = i
+                                logger.info(f"Found amount column at index {i}: {header}")
+                        
+                        if date_col_idx is None or amount_col_idx is None:
+                            logger.warning(f"Essential columns not found: date={date_col_idx}, amount={amount_col_idx}")
+                            continue
+                        
+                        # Обробляємо рядки даних
+                        for row_num, row in df.iterrows():
+                            try:
+                                if row.isna().all():
+                                    continue
+                                
+                                # Витягуємо дані з рядка
+                                date_str = str(row.iloc[date_col_idx] if date_col_idx < len(row) else '').strip()
+                                amount_str = str(row.iloc[amount_col_idx] if amount_col_idx < len(row) else '').strip()
+                                description_str = str(row.iloc[description_col_idx] if description_col_idx is not None and description_col_idx < len(row) else 'Транзакція ПриватБанку').strip()
+                                
+                                # Пропускаємо порожні рядки
+                                if not date_str or not amount_str:
+                                    continue
+                                
+                                # Парсимо дату
+                                date_parsed = self._parse_date(date_str)
+                                if not date_parsed:
+                                    logger.warning(f"Cannot parse date: {date_str}")
+                                    continue
+                                
+                                # Парсимо суму
+                                amount_clean = re.sub(r'[^\d\-\+\.\,\s]', '', amount_str)
+                                amount_clean = amount_clean.replace(' ', '').replace(',', '.')
+                                
+                                try:
+                                    amount = float(amount_clean)
+                                except ValueError:
+                                    logger.warning(f"Cannot parse amount: {amount_str} -> {amount_clean}")
+                                    continue
+                                
+                                # Визначаємо тип транзакції
+                                transaction_type = 'expense' if amount < 0 else 'income'
+                                amount = abs(amount)
+                                
+                                # Призначаємо категорію через ML категоризатор
+                                from services.ml_categorizer import transaction_categorizer
+                                category = transaction_categorizer.suggest_category_for_bank_statement(description_str, transaction_type)
+                                
+                                # Створюємо транзакцію
+                                transaction = {
+                                    'date': date_parsed.strftime('%Y-%m-%d'),
+                                    'amount': amount,
+                                    'description': description_str,
+                                    'type': transaction_type,
+                                    'category': category,
+                                    'source': 'privatbank_pdf'
+                                }
+                                
+                                transactions.append(transaction)
+                                logger.debug(f"Parsed transaction: {transaction}")
+                                
+                            except Exception as e:
+                                logger.warning(f"Error processing row {row_num}: {str(e)}")
+                                continue
+            
+            logger.info(f"Extracted {len(transactions)} transactions from PrivatBank PDF file")
+            return self._clean_and_validate_transactions(transactions)
+        
+        except Exception as e:
+            logger.error(f"Error parsing PrivatBank PDF: {str(e)}", exc_info=True)
             raise
 
 class ReceiptProcessor:
@@ -1303,6 +1593,9 @@ class ReceiptProcessor:
         """
         try:
             # Read image
+            from PIL import Image
+            import pytesseract
+            
             image = Image.open(image_path)
             
             # Extract text using OCR
@@ -1324,179 +1617,35 @@ class ReceiptProcessor:
             raise
 
     def _extract_amount(self, text: str) -> float:
+        import re
         amounts = re.findall(self.currency_pattern, text)
         if amounts:
             return float(amounts[-1].replace(',', '.'))
         return 0.0
 
     def _extract_date(self, text: str) -> datetime:
+        import re
         dates = re.findall(self.date_pattern, text)
         if dates:
             return datetime.strptime(dates[0], '%d/%m/%Y')
         return datetime.now()
 
     def _extract_items(self, text: str) -> List[Dict]:
+        import re
         items = []
         lines = text.split('\n')
         for line in lines:
             if re.search(self.currency_pattern, line):
-                amount = float(re.findall(self.currency_pattern, line)[0].replace(',', '.'))
-                description = line.split(str(amount))[0].strip()
-                items.append({
-                    'description': description,
-                    'amount': amount
-                })
+                amount_match = re.findall(self.currency_pattern, line)
+                if amount_match:
+                    amount = float(amount_match[0].replace(',', '.'))
+                    description = line.split(str(amount))[0].strip()
+                    items.append({
+                        'description': description,
+                        'amount': amount
+                    })
         return items
 
-    def _parse_privatbank_excel(self, df: pd.DataFrame) -> List[Dict]:
-        """
-        Парсер для виписки Приватбанку у форматі Excel/CSV
-        """
-        transactions = []  # Initialize transactions list
-        
-        # Отримуємо назви колонок для парсингу (з урахуванням можливих варіацій)
-        date_col = self._find_column_by_patterns(df.columns, ['дата', 'date', 'дата операції'])
-        description_col = self._find_column_by_patterns(df.columns, ['опис', 'description', 'опис операції', 'призначення платежу'])
-        amount_col = self._find_column_by_patterns(df.columns, ['сума', 'amount', 'сума в валюті картки', 'сума у валюті картки'])
-        currency_col = self._find_column_by_patterns(df.columns, ['валюта', 'currency', 'валюта картки'])
-        
-        logger.info(f"PrivatBank parser using columns: date={date_col}, description={description_col}, amount={amount_col}, currency={currency_col}")
-        
-        # Якщо не знайшли необхідні колонки, спробуємо за порядковими номерами
-        if not date_col or not amount_col:
-            logger.warning("Could not find essential columns by patterns, trying positional approach")
-            # Класичний формат виписки Приватбанку
-            if len(df.columns) >= 7:  # Мінімальна кількість колонок для Приватбанку
-                date_col = df.columns[0]  # Перша колонка - зазвичай дата
-                description_col = df.columns[2] if len(df.columns) > 2 else None  # Третя колонка - опис
-                amount_col = df.columns[5] if len(df.columns) > 5 else None  # Шоста колонка - сума
-                currency_col = df.columns[6] if len(df.columns) > 6 else None  # Сьома колонка - валюта
-        
-        # Перебираємо рядки та витягуємо транзакції
-        for _, row in df.iterrows():
-            try:
-                # Пропускаємо порожні рядки або рядки із заголовками/підсумками
-                if row.isna().all() or self._is_header_or_summary_row(row):
-                    continue
-                
-                # Перевіряємо, чи це не рядок з назвою виписки або іншою службовою інформацією
-                if date_col is not None:
-                    row_text = str(row[date_col]).lower().strip()
-                    if 'виписка' in row_text or 'період' in row_text or 'заявка' in row_text:
-                        continue
-                
-                # Отримуємо дату транзакції
-                date_value = None
-                if date_col is not None and not pd.isna(row[date_col]):
-                    date_str = str(row[date_col])
-                    date_value = self._parse_date(date_str)
-                
-                if not date_value:
-                    continue  # Пропускаємо рядки без дати
-                
-                # Отримуємо опис транзакції
-                description = "Транзакція Приватбанку"
-                if description_col is not None and not pd.isna(row[description_col]):
-                    description = str(row[description_col]).strip()
-                
-                # Отримуємо суму транзакції
-                amount = None
-                if amount_col is not None and not pd.isna(row[amount_col]):
-                    try:
-                        amount_str = str(row[amount_col]).strip()
-                        # Видаляємо всі символи крім цифр, крапок, ком та знаків мінус
-                        amount_clean = re.sub(r'[^\d\-\+\.\,]', '', amount_str)
-                        amount_clean = amount_clean.replace(',', '.')
-                        amount = float(amount_clean) if amount_clean else None
-                    except (ValueError, TypeError):
-                        logger.warning(f"Could not parse amount: {row[amount_col]} for transaction on {date_value}")
-                        continue
-                
-                if amount is None:
-                    continue  # Пропускаємо транзакції без суми
-                
-                # Визначаємо тип транзакції (дохід чи витрата)
-                # У Приватбанку витрати зазвичай вказані з мінусом
-                transaction_type = 'expense' if amount < 0 else 'income'
-                
-                # Визначаємо валюту
-                currency = "UAH"  # За замовчуванням гривня
-                if currency_col is not None and not pd.isna(row[currency_col]):
-                    currency_str = str(row[currency_col]).strip().upper()
-                    if currency_str:
-                        currency = currency_str
-                
-                # Визначаємо категорію
-                category = self._suggest_category(description, transaction_type) if hasattr(self, '_suggest_category') else None
-                
-                transaction = {
-                    'date': date_value.strftime('%Y-%m-%d') if isinstance(date_value, datetime) else str(date_value),
-                    'amount': abs(amount),  # Зберігаємо як позитивне число
-                    'description': description,
-                    'type': transaction_type,
-                    'currency': currency,
-                    'source': 'PrivatBank'
-                }
-                
-                if category:
-                    transaction['category'] = category
-                
-                transactions.append(transaction)
-                
-            except Exception as e:
-                logger.warning(f"Error processing PrivatBank row: {str(e)}")
-                continue
-        
-        return transactions
-
-    def _suggest_category(self, description: str, transaction_type: str) -> str:
-        """
-        Пропонує категорію для транзакції на основі опису
-        """
-        description_lower = description.lower()
-        
-        # Словник категорій і ключових слів для них
-        categories = {
-            # Витрати
-            'groceries': ['продукти', 'супермаркет', 'маркет', 'ашан', 'сільпо', 'novus', 'fora', 'фора', 
-                         'атб', 'метро', 'еко маркет', 'grocery', 'food'],
-            'restaurants': ['ресторан', 'кафе', 'піца', 'суші', 'кава', 'кофе', 'рест', 'mcdonalds', 'кфс', 'restaurant'],
-            'transport': ['таксі', 'uber', 'bolt', 'укрзалізниця', 'метро', 'автобус', 'поїзд', 'бензин', 'паркування',
-                         'taxi', 'transport', 'train', 'plane', 'ticket'],
-            'utilities': ['комуналка', 'електроенергія', 'газ', 'вода', 'інтернет', 'телефон', 'опалення', 'квартплата',
-                         'utilities', 'internet', 'water', 'gas', 'electricity'],
-            'entertainment': ['кіно', 'театр', 'музей', 'виставка', 'концерт', 'розваги', 'netflix', 'підписка',
-                             'cinema', 'movie', 'entertainment', 'subscription'],
-            'shopping': ['одяг', 'взуття', 'магазин', 'зара', 'h&m', 'mango', 'техніка', 'apple', 'samsung',
-                         'shopping', 'clothes', 'shoes', 'electronics'],
-            'health': ['ліки', 'аптека', 'лікар', 'стоматолог', 'лікарня', 'медицина', 'медичний',
-                      'medicine', 'pharmacy', 'doctor', 'hospital', 'health'],
-            'education': ['освіта', 'курси', 'навчання', 'книги', 'школа', 'університет', 'education', 'course'],
-            
-            # Доходи
-            'salary': ['зарплата', 'аванс', 'заробітна плата', 'зп', 'salary', 'wage', 'payroll'],
-            'cashback': ['кешбек', 'повернення', 'бонус', 'cashback', 'return', 'bonus'],
-            'gift': ['подарунок', 'gift', 'present'],
-            'investment': ['дивіденди', 'відсотки', 'інвестиції', 'dividend', 'interest', 'investment']
-        }
-        
-        # Основні категорії для типів транзакцій
-        expense_categories = ['groceries', 'restaurants', 'transport', 'utilities', 'entertainment', 'shopping', 'health', 'education']
-        income_categories = ['salary', 'cashback', 'gift', 'investment']
-        
-        # Визначаємо список категорій в залежності від типу транзакції
-        category_list = income_categories if transaction_type == 'income' else expense_categories
-        
-        # Шукаємо співпадіння з ключовими словами
-        for category, keywords in categories.items():
-            if category in category_list:  # Обираємо категорії відповідно до типу транзакції
-                for keyword in keywords:
-                    if keyword in description_lower:
-                        return category
-        
-        # Якщо нічого не знайдено, повертаємо загальну категорію
-        return 'income' if transaction_type == 'income' else 'other'
-
-# Create instances for import
+# Create an instance for import
 statement_parser = StatementParser()
 receipt_processor = ReceiptProcessor()

@@ -119,7 +119,7 @@ def main():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_ai_question)
             ]
         },
-        fallbacks=[CallbackQueryHandler(callback_handler.back_to_main, pattern="^back_to_main$|^ai_assistant_menu$")]
+        fallbacks=[CallbackQueryHandler(callback_handler.back_to_main, pattern="^back_to_main$")]
     )
     application.add_handler(ai_assistant_handler)
     

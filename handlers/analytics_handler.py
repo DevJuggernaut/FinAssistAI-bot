@@ -54,8 +54,8 @@ async def show_analytics_main_menu(query, context):
         # Меню з 3 кнопками: графіки, статистика та PDF звіт
         keyboard = [
             [
-                InlineKeyboardButton("� Графіки", callback_data="analytics_charts"),
-                InlineKeyboardButton("� Статистика", callback_data="analytics_detailed")
+                InlineKeyboardButton("📊 Графіки", callback_data="analytics_charts"),
+                InlineKeyboardButton("📈 Статистика", callback_data="analytics_detailed")
             ],
             [
                 InlineKeyboardButton("📄 PDF Звіт", callback_data="generate_pdf_report")
@@ -1818,7 +1818,7 @@ async def show_analytics_detailed(query, context):
         savings_rate = ((total_income - total_expenses) / total_income * 100) if total_income > 0 else 0
         
         # Формуємо текст з висновками
-        text = "� **Детальна статистика**\n\n"
+        text = "📈 **Детальна статистика**\n\n"
         
         # Основні показники
         text += "💰 **За останні 30 днів:**\n"
@@ -1836,7 +1836,7 @@ async def show_analytics_detailed(query, context):
             text += f"👍 Добре! `{savings_rate:.1f}%` заощаджень\n"
             text += "💡 Можна покращити до 20%\n\n"
         elif savings_rate >= 0:
-            text += f"� Заощадження: `{savings_rate:.1f}%`\n"
+            text += f"💰 Заощадження: `{savings_rate:.1f}%`\n"
             text += "⚠️ Рекомендуємо 10-20%\n\n"
         else:
             text += f"🚨 Перевитрата `{abs(savings_rate):.1f}%`\n"
@@ -1890,7 +1890,7 @@ async def show_analytics_detailed(query, context):
         
         keyboard = [
             [
-                InlineKeyboardButton("� Графіки", callback_data="analytics_charts"),
+                InlineKeyboardButton("📊 Графіки", callback_data="analytics_charts"),
                 InlineKeyboardButton("💡 AI Поради", callback_data="analytics_insights_simple")
             ],
             [
@@ -1925,7 +1925,7 @@ async def show_analytics_charts(query, context):
             "• Порівняння доходів та витрат\n"
             "• Динаміка змін за період\n"
             "• Детальний аналіз трендів\n\n"
-            "� *Після вибору діаграми оберете період для аналізу*"
+            "📊 *Після вибору діаграми оберете період для аналізу*"
         )
         
         keyboard = [
@@ -1938,18 +1938,34 @@ async def show_analytics_charts(query, context):
             ]
         ]
         
-        await query.edit_message_text(
-            text=text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
+        try:
+            await query.edit_message_text(
+                text=text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
+            )
+        except Exception as edit_error:
+            # Якщо не можемо редагувати (наприклад, попереднє повідомлення з фото), відправляємо нове
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
+            )
         
     except Exception as e:
         logger.error(f"Error in show_analytics_charts: {str(e)}")
-        await query.edit_message_text(
-            "❌ Помилка при завантаженні графіків",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
-        )
+        try:
+            await query.edit_message_text(
+                "❌ Помилка при завантаженні графіків",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
+            )
+        except:
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="❌ Помилка при завантаженні графіків",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics")]])
+            )
 
 async def show_analytics_insights_simple(query, context):
     """Показує прості та корисні поради на основі аналізу"""
@@ -2192,18 +2208,34 @@ async def show_chart_data_type_selection(query, context, chart_type):
         
         keyboard.append([InlineKeyboardButton("◀️ До графіків", callback_data="analytics_charts")])
         
-        await query.edit_message_text(
-            text=text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
+        try:
+            await query.edit_message_text(
+                text=text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
+            )
+        except Exception as edit_error:
+            # Якщо не можемо редагувати, відправляємо нове повідомлення
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
+            )
         
     except Exception as e:
         logger.error(f"Error in show_chart_data_type_selection: {str(e)}")
-        await query.edit_message_text(
-            "❌ Помилка при завантаженні меню",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_charts")]])
-        )
+        try:
+            await query.edit_message_text(
+                "❌ Помилка при завантаженні меню",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_charts")]])
+            )
+        except:
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="❌ Помилка при завантаженні меню",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_charts")]])
+            )
 
 async def show_chart_period_selection(query, context, chart_type, data_type):
     """Показує меню вибору періоду для графіку"""
@@ -2253,26 +2285,47 @@ async def show_chart_period_selection(query, context, chart_type, data_type):
             # Для кругових діаграм — назад до вибору типу даних
             keyboard.append([InlineKeyboardButton("◀️ До типу даних", callback_data=f"chart_type_{chart_type}")])
         
-        
-        await query.edit_message_text(
-            text=text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
+        try:
+            await query.edit_message_text(
+                text=text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
+            )
+        except Exception as edit_error:
+            # Якщо не можемо редагувати, відправляємо нове повідомлення
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
+            )
         
     except Exception as e:
         logger.error(f"Error in show_chart_period_selection: {str(e)}")
-        await query.edit_message_text(
-            "❌ Помилка при завантаженні меню",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_charts")]])
-        )
+        try:
+            await query.edit_message_text(
+                "❌ Помилка при завантаженні меню",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_charts")]])
+            )
+        except:
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="❌ Помилка при завантаженні меню",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_charts")]])
+            )
 
 async def generate_simple_chart(query, context, chart_type, data_type, period):
     """Генерує простий та зрозумілий графік"""
     try:
         user = get_user(query.from_user.id)
         if not user:
-            await query.edit_message_text("❌ Користувач не знайдений")
+            try:
+                await query.edit_message_text("❌ Користувач не знайдений")
+            except:
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="❌ Користувач не знайдений"
+                )
             return
         
         # Визначаємо період
@@ -2288,22 +2341,40 @@ async def generate_simple_chart(query, context, chart_type, data_type, period):
         transactions = get_user_transactions(user.id, start_date=start_date, end_date=now)
         
         if not transactions:
-            await query.edit_message_text(
-                f"📊 Немає даних за період: {period_name}\n\n"
-                "Додайте транзакції для створення графіків.",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("➕ Додати транзакцію", callback_data="add_transaction")],
-                    [InlineKeyboardButton("◀️ До графіків", callback_data="analytics_charts")]
-                ])
-            )
+            try:
+                await query.edit_message_text(
+                    f"📊 Немає даних за період: {period_name}\n\n"
+                    "Додайте транзакції для створення графіків.",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("➕ Додати транзакцію", callback_data="add_transaction")],
+                        [InlineKeyboardButton("◀️ До графіків", callback_data="analytics_charts")]
+                    ])
+                )
+            except:
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=f"📊 Немає даних за період: {period_name}\n\nДодайте транзакції для створення графіків.",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("➕ Додати транзакцію", callback_data="add_transaction")],
+                        [InlineKeyboardButton("◀️ До графіків", callback_data="analytics_charts")]
+                    ])
+                )
             return
         
         # Показуємо повідомлення про створення графіку
-        loading_msg = await query.edit_message_text(
-            f"📊 Створюю {chart_type} графік...\n"
-            f"📅 Період: {period_name}\n"
-            f"💾 Обробляю {len(transactions)} транзакцій..."
-        )
+        try:
+            loading_msg = await query.edit_message_text(
+                f"📊 Створюю {chart_type} графік...\n"
+                f"📅 Період: {period_name}\n"
+                f"💾 Обробляю {len(transactions)} транзакцій..."
+            )
+        except:
+            loading_msg = await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=f"📊 Створюю {chart_type} графік...\n"
+                f"📅 Період: {period_name}\n"
+                f"💾 Обробляю {len(transactions)} транзакцій..."
+            )
         
         # Фільтруємо транзакції за типом
         if data_type == "expenses":
@@ -2318,14 +2389,24 @@ async def generate_simple_chart(query, context, chart_type, data_type, period):
         
         if not filtered_transactions and data_type != "comparison":
             data_name = "витрат" if data_type == "expenses" else "доходів"
-            await loading_msg.edit_text(
-                f"📊 Немає {data_name} за період: {period_name}\n\n"
-                "Спробуйте інший період або додайте транзакції.",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("◀️ До періодів", callback_data=f"chart_data_{data_type}_{chart_type}")],
-                    [InlineKeyboardButton("◀️ До графіків", callback_data="analytics_charts")]
-                ])
-            )
+            try:
+                await loading_msg.edit_text(
+                    f"📊 Немає {data_name} за період: {period_name}\n\n"
+                    "Спробуйте інший період або додайте транзакції.",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("◀️ До періодів", callback_data=f"chart_data_{data_type}_{chart_type}")],
+                        [InlineKeyboardButton("◀️ До графіків", callback_data="analytics_charts")]
+                    ])
+                )
+            except:
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=f"📊 Немає {data_name} за період: {period_name}\n\nСпробуйте інший період або додайте транзакції.",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("◀️ До періодів", callback_data=f"chart_data_{data_type}_{chart_type}")],
+                        [InlineKeyboardButton("◀️ До графіків", callback_data="analytics_charts")]
+                    ])
+                )
             return
         
         # Створюємо графік
@@ -2379,20 +2460,36 @@ async def generate_simple_chart(query, context, chart_type, data_type, period):
             
         except Exception as chart_error:
             logger.error(f"Error creating chart: {str(chart_error)}")
-            await loading_msg.edit_text(
-                "❌ Помилка при створенні графіку\n\n"
-                "Спробуйте ще раз або оберіть інший тип графіку.",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("◀️ До графіків", callback_data="analytics_charts")]
-                ])
-            )
+            try:
+                await loading_msg.edit_text(
+                    "❌ Помилка при створенні графіку\n\n"
+                    "Спробуйте ще раз або оберіть інший тип графіку.",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("◀️ До графіків", callback_data="analytics_charts")]
+                    ])
+                )
+            except:
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="❌ Помилка при створенні графіку\n\nСпробуйте ще раз або оберіть інший тип графіку.",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("◀️ До графіків", callback_data="analytics_charts")]
+                    ])
+                )
         
     except Exception as e:
         logger.error(f"Error in generate_simple_chart: {str(e)}")
-        await query.edit_message_text(
-            "❌ Помилка при створенні графіку",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_charts")]])
-        )
+        try:
+            await query.edit_message_text(
+                "❌ Помилка при створенні графіку",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_charts")]])
+            )
+        except:
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="❌ Помилка при створенні графіку",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="analytics_charts")]])
+            )
 
 async def create_pie_chart(transactions, data_type, title):
     """Створює сучасну кругову діаграму з покращеним дизайном"""
@@ -2754,7 +2851,7 @@ async def generate_pdf_report(query, context):
         # Показуємо меню після відправки - БЕЗ кнопки "Новий звіт"
         keyboard = [
             [
-                InlineKeyboardButton("� До аналітики", callback_data="analytics"),
+                InlineKeyboardButton("📊 До аналітики", callback_data="analytics"),
             ],
             [
                 InlineKeyboardButton("◀️ Головне меню", callback_data="back_to_main")

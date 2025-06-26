@@ -2,6 +2,9 @@ from database.models import Session, User, Category, Transaction, BudgetPlan, Ca
 from sqlalchemy import func
 from datetime import datetime, timedelta
 import calendar
+import logging
+
+logger = logging.getLogger(__name__)
 
 def get_or_create_user(telegram_id, username=None, first_name=None, last_name=None):
     """Отримує або створює запис користувача в базі даних"""
@@ -75,16 +78,21 @@ def update_user_settings(telegram_id, **settings):
     
     return user
 
-def add_transaction(user_id, amount, description, category_id, transaction_type, transaction_date=None, source="manual", receipt_image=None):
+def add_transaction(user_id, amount, description, category_id, transaction_type, account_id=None, transaction_date=None, source="manual", receipt_image=None):
     """Додає нову транзакцію до бази даних"""
     session = Session()
     
     if transaction_date is None:
         transaction_date = datetime.utcnow()
     
+    # Якщо account_id не вказано, використовуємо головний рахунок користувача
+    if account_id is None:
+        account_id = get_user_main_account_id(user_id)
+    
     transaction = Transaction(
         user_id=user_id,
         category_id=category_id,
+        account_id=account_id,
         amount=amount,
         description=description,
         transaction_date=transaction_date,
@@ -287,32 +295,49 @@ def get_transaction_by_id(transaction_id, user_id):
 
 def update_transaction(transaction_id, user_id, **updates):
     """Оновлює транзакцію"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"update_transaction called: transaction_id={transaction_id}, user_id={user_id}, updates={updates}")
+    
     session = Session()
     transaction = session.query(Transaction)\
         .filter(Transaction.id == transaction_id, Transaction.user_id == user_id)\
         .first()
     
     if not transaction:
+        logger.error(f"Transaction not found: id={transaction_id}, user_id={user_id}")
         session.close()
         return None
     
+    logger.info(f"Found transaction: id={transaction.id}, current_type={transaction.type}, current_amount={transaction.amount}")
+    
     # Оновлюємо тільки ті поля, які передані
     if 'amount' in updates:
+        logger.info(f"Updating amount from {transaction.amount} to {updates['amount']}")
         transaction.amount = updates['amount']
     if 'description' in updates:
         transaction.description = updates['description']
     if 'category_id' in updates:
+        logger.info(f"Updating category_id from {transaction.category_id} to {updates['category_id']}")
         transaction.category_id = updates['category_id']
     if 'transaction_date' in updates:
         transaction.transaction_date = updates['transaction_date']
     if 'type' in updates:
+        logger.info(f"Updating type from {transaction.type} to {updates['type']}")
         transaction.type = updates['type']
     
-    session.commit()
-    session.refresh(transaction)
-    session.close()
-    
-    return transaction
+    try:
+        session.commit()
+        session.refresh(transaction)
+        logger.info(f"Transaction updated successfully: id={transaction.id}, new_type={transaction.type}, new_amount={transaction.amount}")
+        session.close()
+        return transaction
+    except Exception as e:
+        logger.error(f"Error updating transaction: {e}")
+        session.rollback()
+        session.close()
+        return None
 
 def delete_transaction(transaction_id, user_id):
     """Видаляє транзакцію"""
@@ -404,6 +429,10 @@ def create_category(user_id, category_name, category_type=None, icon=None):
 def create_account(user_id, name, account_type, balance=0.0, currency='UAH', is_main=False, icon=None, description=None):
     """Створює новий рахунок для користувача"""
     from database.models import Account, AccountType
+    
+    # Валідація балансу
+    if balance < 0:
+        raise ValueError("Баланс не може бути від'ємним")
     
     session = Session()
     try:
@@ -555,6 +584,10 @@ def transfer_between_accounts(from_account_id, to_account_id, amount, descriptio
     """Здійснює переказ між рахунками"""
     from database.models import Account, Transaction, TransactionType
     
+    # Перевіряємо валідність суми
+    if amount <= 0:
+        return False, "Сума повинна бути більше нуля"
+    
     session = Session()
     try:
         # Отримуємо рахунки
@@ -671,5 +704,39 @@ def get_accounts_statistics(user_id):
             'monthly_growth': monthly_growth,
             'monthly_transactions': monthly_transactions
         }
+    finally:
+        session.close()
+
+def get_user_main_account_id(user_id):
+    """Отримує ID головного рахунку користувача"""
+    from database.models import Account
+    
+    session = Session()
+    try:
+        # Спочатку шукаємо головний рахунок
+        main_account = session.query(Account).filter(
+            Account.user_id == user_id,
+            Account.is_main == True,
+            Account.is_active == True
+        ).first()
+        
+        if main_account:
+            return main_account.id
+        
+        # Якщо головного рахунку немає, беремо перший активний
+        first_account = session.query(Account).filter(
+            Account.user_id == user_id,
+            Account.is_active == True
+        ).first()
+        
+        if first_account:
+            return first_account.id
+        
+        # Якщо рахунків взагалі немає, повертаємо None
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error getting main account ID: {e}")
+        return None
     finally:
         session.close()

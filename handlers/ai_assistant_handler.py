@@ -47,7 +47,7 @@ async def show_ai_assistant_menu(query, context):
             "Передбачення витрат на наступний місяць\n\n"
             "❓ **Запитати AI**\n"
             "Отримайте відповідь на будь-яке питання\n\n"
-            "� *Всі поради базуються на ваших даних*"
+            "💡 *Всі поради базуються на ваших даних*"
         )
         
         await query.edit_message_text(
@@ -414,7 +414,7 @@ async def handle_ai_question(update, context):
     """Обробляє кастомне питання до AI"""
     try:
         user_question = update.message.text
-        user = get_user(update.from_user.id)
+        user = get_user(update.effective_user.id)
         
         if not user:
             await update.message.reply_text(
@@ -427,7 +427,7 @@ async def handle_ai_question(update, context):
         
         # Показуємо повідомлення про обробку
         processing_msg = await update.message.reply_text(
-            "� **Обробляю питання...**\n\n"
+            "⌛ **Обробляю питання...**\n\n"
             "⏳ *Готую персональну відповідь*"
         )
         

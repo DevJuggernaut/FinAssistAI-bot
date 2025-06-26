@@ -6,6 +6,8 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 import logging
 import os
+import calendar
+from copy import copy
 from datetime import datetime
 from database.db_operations import get_user, get_user_categories
 from services.statement_parser import StatementParser
@@ -117,7 +119,7 @@ async def show_enhanced_income_form(query, context):
         
         text = (
             "💰 *Додавання доходу*\n\n"
-            "� **Введіть суму доходу:**\n"
+            "💰 **Введіть суму доходу:**\n"
             "_Наприклад: 15000 або 5000.75_\n\n"
             "📝 **Після суми додайте опис (через пробіл):**\n"
             "_Наприклад: 15000 зарплата_\n\n"
@@ -266,7 +268,10 @@ async def show_upload_excel_guide(query, context):
     )
     
 async def show_privatbank_excel_guide(query, context):
-    """Показує деталні інструкції для завантаження виписки з Приватбанку"""
+    """Показує деталі інструкції для завантаження виписки з Приватбанку"""
+    # Встановлюємо джерело файлу
+    context.user_data['file_source'] = 'privatbank'
+    
     keyboard = [
         [
             InlineKeyboardButton("📤 Надіслати Excel файл", callback_data="start_excel_upload")
@@ -520,7 +525,7 @@ async def handle_edit_single_transaction(query, context):
         keyboard = [
             [
                 InlineKeyboardButton("💰 Сума", callback_data=f"edit_amount_{transaction_id}"),
-                InlineKeyboardButton("📂 Категорія", callback_data=f"edit_category_{transaction_id}")
+                InlineKeyboardButton("📂 Категорія", callback_data=f"change_category_{transaction_id}")
             ],
             [
                 InlineKeyboardButton("📝 Опис", callback_data=f"edit_description_{transaction_id}"),
@@ -605,7 +610,8 @@ async def handle_edit_category(query, context):
     from database.db_operations import get_user, get_user_categories, get_transaction_by_id
     
     try:
-        transaction_id = int(query.data.split('_')[-1])
+        # Парсимо transaction_id з нового формату change_category_{id}
+        transaction_id = int(query.data.replace("change_category_", ""))
         
         user = get_user(query.from_user.id)
         if not user:
@@ -618,13 +624,26 @@ async def handle_edit_category(query, context):
             return
         
         # Отримуємо категорії відповідного типу
-        categories = get_user_categories(user.id, category_type=transaction.type.value)
+        transaction_type_str = transaction.type.value if hasattr(transaction.type, 'value') else str(transaction.type)
+        logger.info(f"Looking for categories with type: {transaction_type_str} for user: {user.id}")
+        categories = get_user_categories(user.id, category_type=transaction_type_str)
+        logger.info(f"Found {len(categories)} categories")
         
         if not categories:
-            await query.answer("Категорії не знайдені.", show_alert=True)
-            return
+            # Спробуємо отримати всі категорії користувача для діагностики
+            all_categories = get_user_categories(user.id)
+            logger.info(f"User has {len(all_categories)} total categories: {[f'{cat.name}({cat.type})' for cat in all_categories]}")
+            
+            # Якщо у користувача є категорії, але не цього типу, показуємо всі
+            if all_categories:
+                categories = all_categories
+                text = f"📂 *Вибір категорії*\n\n⚠️ Категорій типу '{transaction_type_str}' не знайдено.\nОберіть з усіх доступних категорій:"
+            else:
+                await query.answer("❌ У вас немає жодних категорій. Спочатку створіть категорії в налаштуваннях.", show_alert=True)
+                return
+        else:
+            text = "📂 *Вибір категорії*\n\nОберіть нову категорію для транзакції:"
         
-        text = "📂 *Вибір категорії*\n\nОберіть нову категорію для транзакції:"
         
         keyboard = []
         for category in categories:
@@ -655,26 +674,58 @@ async def handle_edit_category(query, context):
 
 async def handle_set_category(query, context):
     """Зберігає нову категорію для транзакції"""
-    from database.db_operations import update_transaction
+    from database.db_operations import update_transaction, get_user
     
     try:
         parts = query.data.split('_')
+        if len(parts) < 4:
+            logger.error(f"Invalid callback data format: {query.data}")
+            await query.answer("❌ Помилка формату даних.", show_alert=True)
+            return
+            
         transaction_id = int(parts[2])
         category_id = int(parts[3])
         
-        result = update_transaction(transaction_id, query.from_user.id, category_id=category_id)
+        # Отримуємо користувача по Telegram ID
+        user = get_user(query.from_user.id)
+        if not user:
+            await query.answer("❌ Користувач не знайдений.", show_alert=True)
+            return
+        
+        logger.info(f"Setting category {category_id} for transaction {transaction_id}, user_id={user.id}")
+        
+        # Використовуємо внутрішній user_id з бази даних
+        result = update_transaction(transaction_id, user.id, category_id=category_id)
         
         if result:
             await query.answer("✅ Категорія оновлена!", show_alert=False)
             # Повертаємося до меню редагування транзакції
-            context.user_data['editing_transaction_id'] = transaction_id
-            await handle_edit_single_transaction(query, context)
+            # Створюємо фейковий query object з правильним callback_data
+            class FakeQuery:
+                def __init__(self, data, from_user, edit_message_text, answer):
+                    self.data = data
+                    self.from_user = from_user
+                    self.edit_message_text = edit_message_text
+                    self.answer = answer
+            
+            fake_query = FakeQuery(
+                data=f"edit_transaction_{transaction_id}",
+                from_user=query.from_user,
+                edit_message_text=query.edit_message_text,
+                answer=query.answer
+            )
+            
+            await handle_edit_single_transaction(fake_query, context)
         else:
+            logger.error(f"Failed to update transaction {transaction_id} with category {category_id}")
             await query.answer("❌ Помилка при оновленні категорії.", show_alert=True)
             
+    except ValueError as e:
+        logger.error(f"Invalid ID format in handle_set_category: {e}")
+        await query.answer("❌ Невірний формат ідентифікатора.", show_alert=True)
     except Exception as e:
         logger.error(f"Error in handle_set_category: {e}")
-        await query.answer("Виникла помилка.", show_alert=True)
+        await query.answer("❌ Виникла помилка.", show_alert=True)
 
 async def handle_delete_transaction(query, context):
     """Обробляє видалення транзакції"""
@@ -719,8 +770,8 @@ async def handle_confirm_delete(query, context):
         
         if success:
             await query.answer("✅ Транзакція видалена!", show_alert=True)
-            # Повертаємося до списку транзакцій
-            await handle_edit_transactions(query, context)
+            # Повертаємося до списку всіх транзакцій
+            await show_all_transactions(query, context)
         else:
             await query.answer("❌ Помилка при видаленні транзакції.", show_alert=True)
             
@@ -948,7 +999,7 @@ async def show_all_transactions(query, context):
         keyboard = [
             [
                 InlineKeyboardButton("🔄 Скинути фільтри", callback_data="reset_transactions_filters"),
-                InlineKeyboardButton("� Налаштувати фільтри", callback_data="transaction_filters")
+                InlineKeyboardButton("🔍 Налаштувати фільтри", callback_data="transaction_filters")
             ],
             [
                 InlineKeyboardButton("◀️ Назад до огляду", callback_data="my_budget_overview")
@@ -975,10 +1026,10 @@ async def show_all_transactions(query, context):
             # Визначаємо тип транзакції (дохід/витрата)
             if transaction.type.value == 'income':
                 amount_str = f"+{transaction.amount:,.0f} {currency_symbol}"
-                type_emoji = "�"
+                type_emoji = "🟢"
             else:
                 amount_str = f"{transaction.amount:,.0f} {currency_symbol}"
-                type_emoji = "�"
+                type_emoji = "🔴"
             
             # Обмежуємо довжину опису для кнопки
             description = transaction.description or category_name
@@ -1060,17 +1111,38 @@ async def handle_import_all_transactions(query, context):
         imported_count = 0
         total_amount = 0
         
+        # Отримуємо категорії користувача для автоматичної категоризації
+        from database.db_operations import get_user_categories
+        from services.ml_categorizer import TransactionCategorizer
+        user_categories = get_user_categories(user.id)
+        categorizer = TransactionCategorizer()
+        
+        # Готуємо категорії для ML категоризатора
+        formatted_categories = []
+        for category in user_categories:
+            formatted_categories.append({
+                'id': category.id,
+                'name': category.name,
+                'icon': category.icon or ('💸' if category.type == 'expense' else '💰'),
+                'type': category.type
+            })
+        
         # Зберігаємо кожну транзакцію в базу даних
         for trans in transactions:
             try:
-                # Визначаємо тип транзакції
-                if isinstance(trans['type'], str):
-                    transaction_type = TransactionType.EXPENSE if trans['type'] == 'expense' else TransactionType.INCOME
-                else:
-                    transaction_type = trans['type']
+                # Отримуємо дані транзакції
+                amount = abs(float(trans.get('amount', 0)))  # Завжди позитивна сума
+                description = trans.get('description', '').strip() or "Імпортована транзакція"
+                trans_type = trans.get('type', 'expense')  # Тип вже має бути визначений в preview
                 
-                # Визначаємо суму (завжди зберігаємо як позитивне число)
-                amount = abs(float(trans.get('amount', 0)))
+                # Визначаємо тип транзакції
+                if isinstance(trans_type, str):
+                    transaction_type = TransactionType.EXPENSE if trans_type == 'expense' else TransactionType.INCOME
+                else:
+                    transaction_type = trans_type
+                
+                logger.info(f"Importing transaction: type={trans_type}, final_enum={transaction_type}, amount={amount}, description={description[:30]}")
+                
                 total_amount += amount
                 
                 # Визначаємо дату
@@ -1095,17 +1167,76 @@ async def handle_import_all_transactions(query, context):
                 if len(description) > 500:  # Обмежуємо довжину опису
                     description = description[:497] + "..."
                 
-                # Визначаємо категорію
+                # Автоматична категоризація на основі категорій користувача
                 category_id = None
-                category_name = trans.get('category', '')
+                category_name = ''
+                category_info = trans.get('category', '')
                 
-                if category_name:
-                    # Шукаємо категорію за назвою або створюємо нову
-                    category = get_category_by_name(user.id, category_name)
-                    if not category:
-                        category = create_category(user.id, category_name)
+                # Перевіряємо, чи category - це словник (результат suggest_category_for_bank_statement)
+                if isinstance(category_info, dict):
+                    category_name = category_info.get('name', '')
+                    logger.info(f"Category is dict: {category_info}")
+                elif isinstance(category_info, str):
+                    category_name = category_info
+                    logger.info(f"Category is string: {category_name}")
+                
+                logger.info(f"Categorizing transaction: description='{description[:30]}', type={transaction_type.value}, category_name='{category_name}'")
+                
+                if category_name and formatted_categories:
+                    # Спочатку перевіряємо, чи є точне співпадіння з категорією користувача
+                    matching_category = next((cat for cat in formatted_categories 
+                                            if cat['name'].lower() == category_name.lower() 
+                                            and cat['type'] == transaction_type.value), None)
                     
-                    category_id = category.id if category else None
+                    if matching_category:
+                        category_id = matching_category['id']
+                        logger.info(f"Found exact category match: {matching_category['name']} (ID: {category_id})")
+                
+                # Якщо категорію не знайдено через точне співпадіння, використовуємо ML категоризатор
+                if not category_id and formatted_categories:
+                    try:
+                        transaction_type_str = transaction_type.value if hasattr(transaction_type, 'value') else str(transaction_type)
+                        user_categories_by_type = [cat for cat in formatted_categories if cat['type'] == transaction_type_str]
+                        
+                        logger.info(f"Using ML categorizer: found {len(user_categories_by_type)} categories of type {transaction_type_str}")
+                        
+                        if user_categories_by_type:
+                            suggested_category = categorizer.get_best_category_for_user(
+                                description=description,
+                                amount=amount,
+                                transaction_type=transaction_type_str,
+                                user_categories=user_categories_by_type
+                            )
+                            if suggested_category:
+                                category_id = suggested_category['id']
+                                logger.info(f"ML categorizer suggested: {suggested_category['name']} (ID: {category_id})")
+                            else:
+                                logger.warning(f"ML categorizer returned no suggestion")
+                    except Exception as e:
+                        logger.warning(f"Error in auto-categorization: {e}")
+                
+                # Якщо категорію не знайдено, використовуємо найбільш загальну категорію відповідного типу
+                if not category_id and formatted_categories:
+                    # Використовуємо найбільш загальну категорію відповідного типу
+                    transaction_type_str = transaction_type.value if hasattr(transaction_type, 'value') else str(transaction_type)
+                    default_categories = [cat for cat in formatted_categories if cat['type'] == transaction_type_str]
+                    
+                    if default_categories:
+                        # Шукаємо категорію "Інше" або першу доступну
+                        other_category = next((cat for cat in default_categories if 'інше' in cat['name'].lower()), None)
+                        category_id = (other_category or default_categories[0])['id']
+                        logger.info(f"Using fallback category: {(other_category or default_categories[0])['name']} (ID: {category_id})")
+                
+                logger.info(f"Final category_id: {category_id}")
+                
+                # Визначаємо рахунок для транзакції
+                account_id = None
+                from database.db_operations import get_user_accounts
+                user_accounts = get_user_accounts(user.id)
+                if user_accounts:
+                    # Використовуємо перший доступний рахунок або основний рахунок
+                    default_account = next((acc for acc in user_accounts if 'основн' in acc.name.lower() or 'карт' in acc.name.lower()), user_accounts[0])
+                    account_id = default_account.id
                 
                 # Створюємо транзакцію
                 transaction = Transaction(
@@ -1115,9 +1246,12 @@ async def handle_import_all_transactions(query, context):
                     description=description,
                     transaction_date=date,
                     category_id=category_id,
+                    account_id=account_id,  # Додаємо рахунок
                     created_at=datetime.now(),
                     source='import'
                 )
+                
+                logger.info(f"Created transaction object: amount={amount}, type={transaction_type}, description={description[:30]}")
                 
                 # Зберігаємо в базу даних
                 session.add(transaction)
@@ -1202,7 +1336,7 @@ async def handle_edit_transactions(query, context):
         keyboard = []
         for transaction in transactions:
             date_str = transaction.transaction_date.strftime("%d.%m.%Y")
-            type_icon = "💸" if transaction.type.value == "expense" else "💰"
+            type_icon = "🔴" if transaction.type.value == "expense" else "🟢"
             category_name = transaction.category_name if hasattr(transaction, 'category_name') and transaction.category_name else "Без категорії"
             
             # Обмежуємо довжину опису
@@ -1685,6 +1819,9 @@ async def reset_transactions_filters(query, context):
             'period': 'month',
             'type': 'all',
             'category': 'all'
+              
+       
+       
         }
         
         # Скидаємо параметри відображення
@@ -1806,11 +1943,12 @@ async def handle_category_filter(query, context, preset_category=None):
         await query.answer("Помилка при зміні фільтра категорії.")
 
 async def show_privatbank_statement_form(query, context):
-    """Показує сучасне, лаконічне меню для завантаження виписки з ПриватБанку з чітким описом кнопок."""
+    """Показує сучасне, лаконічне меню для завантаження виписки з ПриватБанку з чітким описом кнопки."""
     context.user_data['selected_bank'] = 'privatbank'
 
     keyboard = [
-        [InlineKeyboardButton("📊 Завантажити Excel виписку (.xlsx)", callback_data="privatbank_excel_guide")]
+        [InlineKeyboardButton("📊 Завантажити Excel виписку (.xlsx)", callback_data="privatbank_excel_guide")],
+        [InlineKeyboardButton("◀️ Назад", callback_data="upload_statement")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -1883,9 +2021,9 @@ async def show_period_filter_menu(query, context):
         # Відмічаємо поточний вибраний період
         period_texts = {
             'day': "Сьогодні",
-            'week': "Поточний тиждень",
-            'month': "Поточний місяць",
-            'year': "Поточний рік",
+            'week': "Цей тиждень",
+            'month': "Цей місяць",
+            'year': "Цей рік",
             'all': "Весь час"
         }
         
@@ -1900,7 +2038,7 @@ async def show_period_filter_menu(query, context):
     
     except Exception as e:
         logger.error(f"Error showing period filter menu: {str(e)}")
-        await query.answer("Помилка при відображенні меню періодів.")
+        await query.answer("Помилка при відображенні меню періодів.", show_alert=True)
 
 async def show_type_filter_menu(query, context):
     """Показує меню вибору типу транзакції для фільтрації"""
@@ -1935,7 +2073,7 @@ async def show_type_filter_menu(query, context):
     
     except Exception as e:
         logger.error(f"Error showing type filter menu: {str(e)}")
-        await query.answer("Помилка при відображенні меню типів.")
+        await query.answer("Помилка при відображенні меню типів.", show_alert=True)
 
 async def handle_view_single_transaction(query, context):
     """Показує детальну інформацію про транзакцію"""
@@ -1957,8 +2095,7 @@ async def handle_view_single_transaction(query, context):
         
         # Формуємо детальну інформацію про транзакцію
         date_str = transaction.transaction_date.strftime("%d.%m.%Y")
-        time_str = transaction.transaction_date.strftime("%H:%M")
-        type_icon = "💰" if transaction.type.value == "income" else "💸"
+        type_icon = "🟢" if transaction.type.value == "income" else "🔴"
         type_name = "Дохід" if transaction.type.value == "income" else "Витрата"
         category_name = transaction.category_name if hasattr(transaction, 'category_name') and transaction.category_name else "Без категорії"
         category_icon = transaction.category_icon if hasattr(transaction, 'category_icon') and transaction.category_icon else "📋"
@@ -1976,8 +2113,8 @@ async def handle_view_single_transaction(query, context):
             f"{type_icon} *{type_name}*\n\n"
             f"💰 **{amount_display}**\n"
             f"{category_icon} {category_name}\n"
-            f"📅 {date_str} в {time_str}\n\n"
-            f"� {description}"
+            f"📅 {date_str}\n\n"
+            f"📝 {description}"
         )
         
         keyboard = [
@@ -1989,7 +2126,6 @@ async def handle_view_single_transaction(query, context):
                 InlineKeyboardButton("◀️ Назад до списку", callback_data="view_all_transactions")
             ]
         ]
-        
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(
@@ -2064,6 +2200,9 @@ async def handle_monobank_excel_upload(query, context):
 
 async def show_monobank_excel_guide(query, context):
     """Сучасна інструкція для завантаження Excel виписки Monobank з чітким описом кнопки."""
+    # Встановлюємо джерело файлу
+    context.user_data['file_source'] = 'monobank'
+    
     keyboard = [
         [InlineKeyboardButton("📤 Надіслати Excel файл", callback_data="start_excel_upload")],
         [InlineKeyboardButton("◀️ Назад", callback_data="select_bank_monobank")]
@@ -2106,15 +2245,15 @@ async def handle_start_receipt_photo_upload(query, context):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     text = (
-        "� *Фото чеку — автоматичне розпізнавання*\n\n"
+        "📷 *Фото чеку — автоматичне розпізнавання*\n\n"
         "1️⃣ Сфотографуйте чек або завантажте з галереї\n"
         "2️⃣ Бот розпізнає суму, магазин та товари\n"
-        "3️⃣ Підтвердьте дані і збережіть транзакцію\n\n"
+        "3️⃣ Підтвердьте дані та збережіть транзакцію\n\n"
         "⚡ *Що розпізнається:*\n"
         "• Загальна сума та дата покупки\n"
         "• Назва магазину\n"
         "• Список товарів (якщо можливо)\n\n"
-        "� *Для кращого результату:*\n"
+        "💡 *Для кращого результату:*\n"
         "• Чіткий текст, хороше освітлення\n"
         "• Весь чек в кадрі, без відблисків\n\n"
         "Надішліть фото чеку зараз."
@@ -2184,9 +2323,9 @@ async def process_transaction_input(update, context):
         await update.message.reply_text("❌ Виникла помилка. Спробуйте ще раз.")
 
 async def perform_auto_categorization(update, context):
-    """Виконує автоматичну категоризацію транзакції"""
+    """Виконує автоматичну категоризацію транзакції використовуючи тільки існуючі категорії користувача"""
     try:
-        from database.db_operations import get_user, get_user_categories, get_category_by_name, create_category
+        from database.db_operations import get_user, get_user_categories, get_category_by_id
         from services.ml_categorizer import TransactionCategorizer
         
         user = get_user(update.effective_user.id)
@@ -2199,92 +2338,81 @@ async def perform_auto_categorization(update, context):
             await update.message.reply_text("Дані транзакції не знайдені.")
             return
         
+        # Отримуємо категорії користувача відповідного типу
+        user_categories = get_user_categories(user.id, category_type=transaction_data['type'])
+        
+        if not user_categories:
+            # Якщо у користувача немає категорій відповідного типу, пропонуємо створити їх
+            type_text = "витрат" if transaction_data['type'] == 'expense' else "доходів"
+            await update.message.reply_text(
+                f"❌ *У вас немає категорій для {type_text}*\n\n"
+                f"Спочатку створіть категорії через:\n"
+                f"Головне меню → Налаштування → Категорії\n\n"
+                f"Або скасуйте додавання транзакції командою /cancel",
+                parse_mode="Markdown"
+            )
+            return
+        
+        # Конвертуємо категорії в потрібний формат
+        formatted_categories = []
+        for category in user_categories:
+            formatted_categories.append({
+                'id': category.id,
+                'name': category.name,
+                'icon': category.icon or ('💸' if transaction_data['type'] == 'expense' else '💰'),
+                'type': transaction_data['type']
+            })
+        
         # Використовуємо ML категоризатор
         categorizer = TransactionCategorizer()
         
-        # Отримуємо запропоновану категорію
-        suggested_category = categorizer.categorize_transaction(
+        # Тренуємо категоризатор на історії транзакцій користувача (якщо є)
+        try:
+            from database.db_operations import get_transactions
+            user_transactions = get_transactions(user.id, limit=100)  # Останні 100 транзакцій
+            if user_transactions:
+                formatted_transactions = []
+                for trans in user_transactions:
+                    formatted_transactions.append({
+                        'description': trans.description or '',
+                        'category_id': trans.category_id,
+                        'amount': float(trans.amount),
+                        'type': trans.type.value if hasattr(trans.type, 'value') else str(trans.type)
+                    })
+                categorizer.train_on_user_transactions(formatted_transactions, formatted_categories)
+        except Exception as e:
+            logger.error(f"Error training categorizer on user history: {e}")
+            # Продовжуємо без тренування
+        
+        # Отримуємо найкращу категорію для цієї транзакції
+        suggested_category = categorizer.get_best_category_for_user(
             description=transaction_data['description'],
             amount=transaction_data['amount'],
-            transaction_type=transaction_data['type']
+            transaction_type=transaction_data['type'],
+            user_categories=formatted_categories
         )
         
-        # Шукаємо існуючу категорію користувача за назвою
-        user_categories = get_user_categories(user.id, category_type=transaction_data['type'])
-        real_category = None
-        
-        # Пошук категорії за назвою
-        for category in user_categories:
-            if category.name.lower() == suggested_category['name'].lower():
-                real_category = {
-                    'id': category.id,
-                    'name': category.name,
-                    'icon': category.icon or suggested_category['icon']
-                }
-                break
-        
-        # Якщо категорії немає, створюємо нову
-        if not real_category:
-            try:
-                # Конвертуємо тип транзакції в правильний формат
-                from database.models import TransactionType as DBTransactionType
-                db_type = DBTransactionType.EXPENSE if transaction_data['type'] == 'expense' else DBTransactionType.INCOME
-                
-                new_category = create_category(
-                    user_id=user.id,
-                    category_name=suggested_category['name'],
-                    category_type=db_type,
-                    icon=suggested_category['icon']
-                )
-                if new_category:
-                    real_category = {
-                        'id': new_category.id,
-                        'name': new_category.name,
-                        'icon': new_category.icon or suggested_category['icon']
-                    }
-                else:
-                    # Fallback: використовуємо першу доступну категорію
-                    if user_categories:
-                        first_category = user_categories[0]
-                        real_category = {
-                            'id': first_category.id,
-                            'name': first_category.name,
-                            'icon': first_category.icon or '📦'
-                        }
-                    else:
-                        await update.message.reply_text("❌ Не вдалося створити категорію. Спочатку створіть категорії вручну.")
-                        return
-            except Exception as e:
-                logger.error(f"Error creating category: {e}")
-                # Fallback: використовуємо першу доступну категорію
-                if user_categories:
-                    first_category = user_categories[0]
-                    real_category = {
-                        'id': first_category.id,
-                        'name': first_category.name,
-                        'icon': first_category.icon or '📦'
-                    }
-                else:
-                    await update.message.reply_text("❌ Не вдалося визначити категорію. Спочатку створіть категорії вручну.")
-                    return
+        if not suggested_category:
+            # Fallback: використовуємо першу доступну категорію
+            suggested_category = formatted_categories[0]
         
         # Визначаємо валюту користувача
         currency = user.currency or "UAH"
         currency_symbol = {"UAH": "₴", "USD": "$", "EUR": "€", "GBP": "£"}.get(currency, currency)
         
         # Формуємо повідомлення з результатом категоризації
-        type_icon = "💸" if transaction_data['type'] == 'expense' else "💰"
-        amount_str = f"-{transaction_data['amount']:.0f}{currency_symbol}" if transaction_data['type'] == 'expense' else f"+{transaction_data['amount']:.0f}{currency_symbol}"
+        type_icon = "💸" if transaction_data['type'] == "expense" else "💰"
+        amount_str = f"-{transaction_data['amount']:.0f}{currency_symbol}" if transaction_data['type'] == "expense" else f"+{transaction_data['amount']:.0f}{currency_symbol}"
         
         text = (
             f"🤖 *Я проаналізував вашу операцію:*\n\n"
             f"{type_icon} {amount_str} • {transaction_data['description']}\n"
-            f"📍 *Автоматично віднесено до:* {real_category['icon']} {real_category['name']}\n\n"
+            f"📍 *Автоматично віднесено до:* {suggested_category['icon']} {suggested_category['name']}\n\n"
             f"Це правильно?"
         )
         
-        # Зберігаємо реальну категорію користувача
-        context.user_data['suggested_category'] = real_category
+        # Зберігаємо запропоновану категорію
+        context.user_data['suggested_category'] = suggested_category
         
         keyboard = [
             [
@@ -2361,6 +2489,7 @@ async def handle_change_category(query, context):
         )
         
         keyboard = []
+        current_category = None  # Поки що категорія не вибрана
         
         # Групуємо категорії по 2 в ряд для зручності
         for i in range(0, len(categories), 2):
@@ -2368,12 +2497,9 @@ async def handle_change_category(query, context):
             for j in range(i, min(i + 2, len(categories))):
                 category = categories[j]
                 icon = category.icon or "📂"
-                button_text = f"{icon} {category.name}"
-                
-                row.append(InlineKeyboardButton(
-                    button_text, 
-                    callback_data=f"select_manual_category_{category.id}"
-                ))
+                is_selected = current_category == category.id
+                button_text = f"✅ {icon} {category.name}" if is_selected else f"{icon} {category.name}"
+                row.append(InlineKeyboardButton(button_text, callback_data=f"select_manual_category_{category.id}"))
             keyboard.append(row)
         
         # Додаємо кнопку для скасування
@@ -2394,10 +2520,20 @@ async def handle_change_category(query, context):
         await query.answer("Виникла помилка.", show_alert=True)
 
 async def handle_manual_category_selection(query, context):
-    """Обробляє ручний вибір категорії"""
+    """Обробляє ручний вибір категорії та навчає ML категоризатор"""
     try:
         # Витягуємо ID категорії з callback_data
         category_id = int(query.data.split('_')[-1])
+        
+        # Навчаємо ML категоризатор на виправленій категоризації
+        transaction_data = context.user_data.get('pending_transaction')
+        if transaction_data:
+            await improve_categorization_on_feedback(
+                user_id=query.from_user.id,
+                description=transaction_data['description'],
+                correct_category_id=category_id,
+                transaction_type=transaction_data['type']
+            )
         
         # Зберігаємо транзакцію в базу даних
         await save_transaction_to_db(query, context, category_id)
@@ -2407,10 +2543,11 @@ async def handle_manual_category_selection(query, context):
         await query.answer("Виникла помилка при збереженні.", show_alert=True)
 
 async def save_transaction_to_db(query, context, category_id):
-    """Зберігає транзакцію в базу даних"""
+    """Зберігає транзакцію в базу даних та навчає ML категоризатор"""
     try:
-        from database.db_operations import get_user, add_transaction
+        from database.db_operations import get_user, add_transaction, get_category_by_id
         from database.models import TransactionType
+        from services.ml_categorizer import TransactionCategorizer
         
         user = get_user(query.from_user.id)
         transaction_data = context.user_data.get('pending_transaction')
@@ -2425,6 +2562,9 @@ async def save_transaction_to_db(query, context, category_id):
         # Визначаємо тип транзакції
         transaction_type = TransactionType.EXPENSE if transaction_data['type'] == 'expense' else TransactionType.INCOME
         
+        # Отримуємо ID вибраного рахунку
+        selected_account_id = context.user_data.get('selected_account_id')
+        
         # Зберігаємо транзакцію
         transaction = add_transaction(
             user_id=user.id,
@@ -2432,13 +2572,50 @@ async def save_transaction_to_db(query, context, category_id):
             description=transaction_data['description'],
             category_id=category_id,
             transaction_type=transaction_type,
+            account_id=selected_account_id,
             source="manual"
         )
         
         if transaction:
-            # Отримуємо інформацію про категорію для відображення
-            from database.db_operations import get_category_by_id
+            # Навчаємо ML категоризатор на цій транзакції
+            try:
+                category = get_category_by_id(category_id)
+                if category:
+                    categorizer = TransactionCategorizer()
+                    
+                    # Створюємо навчальні дані
+                    training_transaction = [{
+                        'description': transaction_data['description'],
+                        'category_id': category_id,
+                        'amount': transaction_data['amount'],
+                        'type': transaction_data['type']
+                    }]
+                    
+                    training_category = [{
+                        'id': category.id,
+                        'name': category.name,
+                        'icon': category.icon or ('💸' if transaction_data['type'] == 'expense' else '💰'),
+                        'type': transaction_data['type']
+                    }]
+                    
+                    # Навчаємо категоризатор
+                    categorizer.train_on_user_transactions(training_transaction, training_category)
+                    logger.info(f"ML categorizer trained on new transaction: {transaction_data['description']} -> {category.name}")
+            except Exception as e:
+                logger.error(f"Error training ML categorizer: {e}")
+                # Не критична помилка, продовжуємо
+            
+            # Отримуємо інформацію про категорію та рахунок для відображення
             category = get_category_by_id(category_id)
+            
+            # Отримуємо інформацію про рахунок
+            account_info = ""
+            if selected_account_id:
+                from database.db_operations import get_user_accounts
+                accounts = get_user_accounts(user.id)
+                selected_account = next((acc for acc in accounts if acc.id == selected_account_id), None)
+                if selected_account:
+                    account_info = f"\n💳 {selected_account.icon or '💳'} {selected_account.name}"
             
             # Додамо логування для перевірки категорії
             logger.info(f"Retrieved category: id={category.id if category else None}, name={category.name if category else None}")
@@ -2450,7 +2627,9 @@ async def save_transaction_to_db(query, context, category_id):
             text = (
                 f"✅ *Транзакцію додано!*\n\n"
                 f"{'💸' if transaction_data['type'] == 'expense' else '💰'} {transaction_data['amount']:.0f}₴ • {transaction_data['description']}\n"
-                f"📂 {category.icon or '📂'} {category.name}\n\n"
+                f"📂 {category.icon or '📂'} {category.name}{account_info}\n\n"
+                f"🤖 *ML категоризатор навчився!*\n"
+                f"Наступного разу він краще розпізнаватиме схожі транзакції.\n\n"
                 f"Що далі?"
             )
             
@@ -2473,6 +2652,7 @@ async def save_transaction_to_db(query, context, category_id):
             context.user_data.pop('pending_transaction', None)
             context.user_data.pop('suggested_category', None)
             context.user_data.pop('transaction_type', None)
+            context.user_data.pop('selected_account_id', None)
             
         else:
             await query.answer("❌ Помилка при збереженні транзакції.", show_alert=True)
@@ -2488,6 +2668,7 @@ async def handle_cancel_transaction(query, context):
         context.user_data.pop('pending_transaction', None)
         context.user_data.pop('suggested_category', None)
         context.user_data.pop('transaction_type', None)
+        context.user_data.pop('selected_account_id', None)
         context.user_data.pop('awaiting_transaction_input', None)
         
         keyboard = [
@@ -2609,7 +2790,7 @@ async def show_category_filter_menu(query, context, page=1):
                     row.append(InlineKeyboardButton(button_text, callback_data=callback_data))
                 keyboard.append(row)
         
-        # Додаємо кнопки навігації, якщо потрібно
+        # Додаємо кнопи навігації, якщо потрібно
         if total_pages > 1:
             nav_buttons = []
             
@@ -2619,7 +2800,7 @@ async def show_category_filter_menu(query, context, page=1):
             if page < total_pages:
                 nav_buttons.append(InlineKeyboardButton("Наступні ➡️", callback_data=f"category_page_{page+1}"))
             
-            if nav_buttons:  # Додаємо кнопки тільки якщо вони є
+            if nav_buttons:  # Додаємо кнопи тільки якщо вони є
                 keyboard.append(nav_buttons)
         
         # Додаємо кнопку назад
@@ -2691,3 +2872,473 @@ async def handle_category_selection_for_filter(query, context):
     except Exception as e:
         logger.error(f"Error handling category selection: {str(e)}")
         await query.answer("Помилка при виборі категорії.")
+
+async def handle_edit_date(query, context):
+    """Обробляє редагування дати транзакції"""
+    try:
+        # Витягуємо ID транзакції з callback_data
+        transaction_id = int(query.data.split('_')[2])
+        
+        # Зберігаємо ID транзакції та поле для редагування
+        context.user_data['editing_transaction_id'] = transaction_id
+        context.user_data['editing_field'] = 'date_manual'
+        
+        keyboard = [
+            [InlineKeyboardButton("❌ Скасувати", callback_data=f"edit_transaction_{transaction_id}")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "📅 *Редагування дати транзакції*\n\n"
+            "Введіть нову дату у форматі:\n"
+            "• ДД.ММ.РРРР (наприклад: 25.06.2025)\n"
+            "• ДД.ММ (для 2025 року)\n"
+            "• ДД (для поточного місяця)\n\n"
+            "Або напишіть /cancel для скасування.",
+            parse_mode="Markdown"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in handle_edit_date: {e}")
+        await query.answer("Помилка при редагуванні дати.", show_alert=True)
+
+async def handle_set_date(query, context):
+    """Обробляє встановлення нової дати для транзакції (залишається для сумісності)"""
+    # Ця функція більше не використовується, оскільки користувач одразу вводить дату вручну
+    # Залишена для сумісності з існуючими callback'ами
+    try:
+        await query.answer("Будь ласка, введіть дату у чаті.", show_alert=True)
+    except Exception as e:
+        logger.error(f"Error in handle_set_date: {e}")
+        await query.answer("Помилка.", show_alert=True)
+
+async def handle_edit_type(query, context):
+    """Обробляє редагування типу транзакції"""
+    try:
+        # Витягуємо ID транзакції
+        transaction_id = int(query.data.split('_')[2])
+        
+        # Зберігаємо ID транзакції для подальшого використання
+        context.user_data['editing_transaction_id'] = transaction_id
+        
+        keyboard = [
+            [InlineKeyboardButton("💰 Змінити на дохід", callback_data=f"set_type_{transaction_id}_income")],
+            [InlineKeyboardButton("💸 Змінити на витрату", callback_data=f"set_type_{transaction_id}_expense")],
+            [InlineKeyboardButton("◀️ Назад", callback_data=f"edit_transaction_{transaction_id}")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "🔄 *Редагування типу операції*\n\n"
+            "Оберіть новий тип для цієї транзакції:\n\n"
+            "💰 **Дохід** — зарплата, премії, повернення коштів\n"
+            "💸 **Витрата** — покупки, оплати, послуги\n\n"
+            "⚠️ **Увага:** При зміні типу операції буде потрібно також вибрати нову категорію.",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in handle_edit_type: {e}")
+        await query.answer("Помилка при редагуванні типу операції.", show_alert=True)
+
+async def handle_set_type(query, context):
+    """Обробляє встановлення нового типу для транзакції"""
+    from database.db_operations import get_user, get_transaction_by_id, update_transaction, get_user_categories
+    from database.models import TransactionType
+    
+    try:
+        # Парсимо callback_data
+        parts = query.data.split('_')
+        
+        transaction_id = int(parts[2])
+        new_type = parts[3]  # 'income' або 'expense'
+        
+        # Отримуємо транзакцію
+        user = get_user(query.from_user.id)
+        if not user:
+            await query.answer("Користувач не знайдений.", show_alert=True)
+            return
+            
+        transaction = get_transaction_by_id(transaction_id, user.id)
+        if not transaction:
+            await query.answer("Транзакція не знайдена.", show_alert=True)
+            return
+        
+        # Конвертуємо тип
+        new_transaction_type = TransactionType.INCOME if new_type == 'income' else TransactionType.EXPENSE
+        
+        # Перевіряємо, чи змінився тип
+        current_type_value = transaction.type.value if hasattr(transaction.type, 'value') else str(transaction.type)
+        if current_type_value == new_type:
+            logger.info(f"Тип операції {current_type_value} вже встановлено правильно для транзакції {transaction_id}")
+            await query.answer("Тип операції вже встановлено правильно.", show_alert=True)
+            
+            # Повертаємося до меню редагування транзакції напряму
+            date_str = transaction.transaction_date.strftime("%d.%m.%Y %H:%M")
+            type_icon = "💸" if transaction.type.value == "expense" else "💰"
+            type_name = "Витрата" if transaction.type.value == "expense" else "Дохід"
+            category_name = transaction.category_name if hasattr(transaction, 'category_name') and transaction.category_name else "Без категорії"
+            description = transaction.description or "Без опису"
+            
+            text = f"🔧 <b>Редагування транзакції</b>\n\n"
+            text += f"📅 <b>Дата:</b> {date_str}\n"
+            text += f"{type_icon} <b>Тип:</b> {type_name}\n"
+            text += f"📂 <b>Категорія:</b> {category_name}\n"
+            text += f"💰 <b>Сума:</b> {transaction.amount:.2f} грн\n"
+            text += f"📝 <b>Опис:</b> {description}\n\n"
+            text += "Що ви хочете змінити?"
+            
+            keyboard = [
+                [InlineKeyboardButton("📅 Дата", callback_data=f"edit_date_{transaction.id}")],
+                [InlineKeyboardButton("📂 Категорія", callback_data=f"change_category_{transaction.id}")],
+                [InlineKeyboardButton(f"{type_icon} Тип", callback_data=f"edit_type_{transaction.id}")],
+                [InlineKeyboardButton("💰 Сума", callback_data=f"edit_amount_{transaction.id}")],
+                [InlineKeyboardButton("📝 Опис", callback_data=f"edit_description_{transaction.id}")],
+                [InlineKeyboardButton("🗑️ Видалити", callback_data=f"delete_transaction_{transaction.id}")],
+                [InlineKeyboardButton("🔙 Назад", callback_data=f"view_transaction_{transaction.id}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            logger.info(f"Повернулися до меню редагування транзакції {transaction_id}")
+            return
+            return
+        
+        # Отримуємо категорії нового типу
+        categories = get_user_categories(user.id, category_type=new_type)
+        
+        if not categories:
+            # Якщо немає категорій відповідного типу, попереджаємо користувача
+            type_text = "доходів" if new_type == "income" else "витрат"
+            await query.edit_message_text(
+                f"❌ *Немає категорій для {type_text}*\n\n"
+                f"Спочатку створіть категорії для {type_text} у розділі 'Налаштування' → 'Категорії'.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("◀️ Назад", callback_data=f"edit_transaction_{transaction_id}")]
+                ]),
+                parse_mode="Markdown"
+            )
+            return
+        
+        # Зберігаємо новий тип та ID транзакції для вибору категорії
+        context.user_data['editing_transaction_id'] = transaction_id
+        context.user_data['new_transaction_type'] = new_type
+        
+        # Показуємо категорії для вибору
+        type_text = "доходу" if new_type == "income" else "витрати"
+        type_icon = "💰" if new_type == "income" else "💸"
+        
+        text = (
+            f"🔄 *Зміна типу на {type_text}*\n\n"
+            f"{type_icon} Тип операції буде змінено на **{type_text}**.\n\n"
+            f"📂 Оберіть категорію для цього типу операції:"
+        )
+        
+        keyboard = []
+        for category in categories:
+            icon = category.icon or "💰"
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"{icon} {category.name}", 
+                    callback_data=f"confirm_type_change_{transaction_id}_{new_type}_{category.id}"
+                )
+            ])
+        
+        keyboard.append([
+            InlineKeyboardButton("◀️ Назад", callback_data=f"edit_type_{transaction_id}")
+        ])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in handle_set_type: {e}")
+        await query.answer("Помилка при встановленні типу операції.", show_alert=True)
+
+async def handle_confirm_type_change(query, context):
+    """Підтверджує зміну типу та категорії транзакції"""
+    from database.db_operations import update_transaction, get_transaction_by_id, get_user
+    from database.models import TransactionType
+    
+    try:
+        logger.info(f"handle_confirm_type_change called with callback_data: {query.data}")
+        
+        # Парсимо callback_data: confirm_type_change_{transaction_id}_{new_type}_{category_id}
+        parts = query.data.split('_')
+        logger.info(f"Parsed parts: {parts}")
+        
+        transaction_id = int(parts[3])
+        new_type = parts[4]
+        category_id = int(parts[5]);
+        
+        logger.info(f"Transaction ID: {transaction_id}, New type: {new_type}, Category ID: {category_id}")
+        
+        # Отримуємо поточну транзакцію для перевірки типу
+        user = get_user(query.from_user.id)
+        if not user:
+            logger.error("User not found")
+            await query.answer("Користувач не знайдений.", show_alert=True)
+            return
+            
+        transaction = get_transaction_by_id(transaction_id, user.id)
+        if not transaction:
+            logger.error("Transaction not found")
+            await query.answer("Транзакція не знайдена.", show_alert=True)
+            return
+        
+        logger.info(f"Current transaction: ID={transaction.id}, type={transaction.type}, amount={transaction.amount}")
+        
+        # Конвертуємо тип
+        new_transaction_type = TransactionType.INCOME if new_type == 'income' else TransactionType.EXPENSE
+        current_type = transaction.type.value if hasattr(transaction.type, 'value') else str(transaction.type)
+        
+        logger.info(f"Current type: {current_type}, New type: {new_transaction_type}")
+        
+        # Визначаємо нову суму (змінюємо знак при зміні типу)
+        current_amount = transaction.amount
+        new_amount = current_amount
+        
+        # Логіка зміни знаку суми при зміні типу
+        if current_type != new_type:
+            if new_type == 'income' and current_amount < 0:
+                # Змінюємо з витрати на дохід: робимо суму позитивною
+                new_amount = abs(current_amount)
+                logger.info(f"Changed amount from {current_amount} to {new_amount} (expense to income)")
+            elif new_type == 'expense' and current_amount > 0:
+                # Змінюємо з доходу на витрату: робимо суму негативною
+                new_amount = -abs(current_amount)
+                logger.info(f"Changed amount from {current_amount} to {new_amount} (income to expense)")
+        
+        # Оновлюємо транзакцію з новим типом, категорією та сумою
+        logger.info(f"Calling update_transaction with params: transaction_id={transaction_id}, user_id={user.id}, type={new_transaction_type}, category_id={category_id}, amount={new_amount}")
+        
+        success = update_transaction(
+            transaction_id, 
+            user.id,  # Використовуємо внутрішній ID користувача
+            type=new_transaction_type,
+            category_id=category_id,
+            amount=new_amount
+        )
+        
+        logger.info(f"Update result: {success}")
+        
+        if success:
+            type_text = "дохід" if new_type == "income" else "витрата"
+            await query.answer(f"✅ Тип операції змінено на '{type_text}'", show_alert=True)
+            
+            # Очищуємо тимчасові дані
+            context.user_data.pop('editing_transaction_id', None)
+            context.user_data.pop('new_transaction_type', None)
+            
+            logger.info("Calling handle_edit_single_transaction...")
+            
+            # Створюємо фейковий query object з правильним callback_data
+            class FakeQuery:
+                def __init__(self, data, from_user, edit_message_text, answer):
+                    self.data = data
+                    self.from_user = from_user
+                    self.edit_message_text = edit_message_text
+                    self.answer = answer
+            
+            fake_query = FakeQuery(
+                data=f"edit_transaction_{transaction_id}",
+                from_user=query.from_user,
+                edit_message_text=query.edit_message_text,
+                answer=query.answer
+            )
+            
+            # Повертаємося до меню редагування транзакції
+            await handle_edit_single_transaction(fake_query, context)
+        else:
+            logger.error("Failed to update transaction")
+            await query.answer("❌ Помилка при оновленні типу операції.", show_alert=True)
+        
+    except Exception as e:
+        logger.error(f"Error in handle_confirm_type_change: {e}")
+        await query.answer("Помилка при підтвердженні зміни типу.", show_alert=True)
+
+async def improve_categorization_on_feedback(user_id: int, description: str, correct_category_id: int, transaction_type: str):
+    """
+    Покращує категоризацію на основі зворотного зв'язку користувача
+    """
+    try:
+        from database.db_operations import get_user, get_user_categories, get_category_by_id
+        from services.ml_categorizer import TransactionCategorizer
+        
+        user = get_user(user_id)
+        if not user:
+            return False
+        
+        # Отримуємо правильну категорію
+        correct_category = get_category_by_id(correct_category_id)
+        if not correct_category:
+            return False
+        
+        # Отримуємо всі категорії користувача цього типу
+        user_categories = get_user_categories(user.id, category_type=transaction_type)
+        formatted_categories = []
+        for category in user_categories:
+            formatted_categories.append({
+                'id': category.id,
+                'name': category.name,
+                'icon': category.icon or ('💸' if transaction_type == 'expense' else '💰'),
+                'type': transaction_type
+            })
+        
+        # Створюємо навчальні дані з виправленої категоризації
+        training_data = [{
+            'description': description,
+            'category_id': correct_category_id,
+            'amount': 0,  # Сума не важлива для навчання на тексті
+            'type': transaction_type
+        }]
+        
+        # Навчаємо категоризатор
+        categorizer = TransactionCategorizer()
+        success = categorizer.train_on_user_transactions(training_data, formatted_categories)
+        
+        logger.info(f"Improved categorization for user {user_id}: '{description}' -> '{correct_category.name}' (success: {success})")
+        return success
+        
+    except Exception as e:
+        logger.error(f"Error improving categorization on feedback: {e}")
+        return False
+
+# ==================== ОБРОБНИКИ ДЛЯ РОЗШИРЕНОГО ІНТЕРФЕЙСУ ДОДАВАННЯ ТРАНЗАКЦІЙ ====================
+
+async def handle_account_selection(query, context):
+    """Обробляє вибір рахунку та переходить до введення суми та опису"""
+    try:
+        # Витягуємо ID рахунку з callback_data
+        account_id = int(query.data.split('_')[-1])
+        
+        # Зберігаємо ID рахунку
+        context.user_data['selected_account_id'] = account_id
+        
+        # Отримуємо тип транзакції
+        transaction_type = context.user_data.get('transaction_type')
+        if not transaction_type:
+            await query.answer("Помилка: тип транзакції не встановлено.", show_alert=True)
+            return
+        
+        # Встановлюємо стан очікування введення транзакції
+        context.user_data['awaiting_transaction_input'] = True
+        
+        # Отримуємо інформацію про рахунок для відображення
+        from database.db_operations import get_user, get_user_accounts
+        user = get_user(query.from_user.id)
+        if user:
+            accounts = get_user_accounts(user.id)
+            selected_account = next((acc for acc in accounts if acc.id == account_id), None)
+            
+            if selected_account:
+                account_info = f"{selected_account.icon or '💳'} {selected_account.name}"
+            else:
+                account_info = "Обраний рахунок"
+        else:
+            account_info = "Обраний рахунок"
+        
+        type_icon = "💸" if transaction_type == "expense" else "💰"
+        type_text = "витрати" if transaction_type == "expense" else "доходу"
+        
+        keyboard = [
+            [InlineKeyboardButton("❌ Скасувати", callback_data="cancel_transaction")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        text = (
+            f"{type_icon} *Додавання {type_text}*\n\n"
+            f"💳 **Рахунок:** {account_info}\n\n"
+            f"💰 **Введіть суму та опис:**\n"
+            f"Напишіть повідомлення у форматі:\n"
+            f"`450 АТБ продукти`\n"
+            f"`1500 зарплата`\n"
+            f"`200 кафе з друзями`\n\n"
+            f"Перше число — сума, далі — опис операції."
+        )
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in handle_account_selection: {e}")
+        await query.answer("Помилка при виборі рахунку.", show_alert=True)
+
+async def show_account_selection(query, context, transaction_type):
+    """Показує список рахунків для вибору перед додаванням транзакції"""
+    try:
+        from database.db_operations import get_user, get_user_accounts
+        
+        user = get_user(query.from_user.id)
+        if not user:
+            await query.answer("Користувач не знайдений.", show_alert=True)
+            return
+        
+        # Зберігаємо тип транзакції
+        context.user_data['transaction_type'] = transaction_type
+        
+        # Отримуємо рахунки користувача
+        accounts = get_user_accounts(user.id)
+        
+        if not accounts:
+            # Якщо рахунків немає, пропонуємо створити
+            keyboard = [
+                [InlineKeyboardButton("➕ Створити рахунок", callback_data="create_account")],
+                [InlineKeyboardButton("◀️ Назад", callback_data="manual_transaction_type")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                "❌ *У вас немає створених рахунків*\n\n"
+                "Для додавання транзакцій потрібно створити хоча б один рахунок.\n\n"
+                "Створіть рахунок або поверніться назад.",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            return
+        
+        # Створюємо кнопки для кожного рахунку
+        keyboard = []
+        for account in accounts:
+            icon = account.icon or '💳'
+            balance_text = f"{account.balance:.0f} {account.currency}"
+            main_text = " ⭐" if account.is_main else ""
+            
+            button_text = f"{icon} {account.name} - {balance_text}{main_text}"
+            callback_data = f"select_account_{account.id}"
+            
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+        
+        # Додаємо кнопку "Назад"
+        keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="manual_transaction_type")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        type_icon = "💸" if transaction_type == "expense" else "💰"
+        type_text = "витрати" if transaction_type == "expense" else "доходу"
+        
+        text = (
+            f"{type_icon} *Додавання {type_text}*\n\n"
+            f"💳 **Оберіть рахунок:**\n"
+            f"Виберіть рахунок, з якого буде списана сума або на який буде зарахований дохід."
+        )
+        
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in show_account_selection: {e}")
+        await query.answer("Помилка при показі рахунків.", show_alert=True)

@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from database.config import DATABASE_URL
 from database.models import (
     Base, engine, User, Category, Transaction, BudgetPlan, 
-    CategoryBudget, FinancialAdvice, TransactionType
+    CategoryBudget, FinancialAdvice, TransactionType, Account, AccountType
 )
 from sqlalchemy import create_engine
 
@@ -181,7 +181,70 @@ def add_categories_to_user(session, user):
     print(f"Додано {categories_added} нових категорій")
     return session.query(Category).filter_by(user_id=user.id).all()
 
-def add_transactions_to_user(session, user, categories, num_transactions=100):
+def add_accounts_to_user(session, user):
+    """Додає рахунки до існуючого користувача"""
+    existing_accounts = session.query(Account).filter_by(user_id=user.id).all()
+    if existing_accounts:
+        print(f"У користувача вже є {len(existing_accounts)} рахунків")
+        return existing_accounts
+    
+    # Створюємо базові рахунки
+    accounts_data = [
+        {
+            "name": "Основна картка",
+            "account_type": AccountType.BANK_CARD,
+            "icon": "💳",
+            "balance": 5000.0,
+            "is_main": True,
+            "description": "Основна банківська картка для щоденних витрат"
+        },
+        {
+            "name": "Готівка",
+            "account_type": AccountType.CASH,
+            "icon": "💵",
+            "balance": 2000.0,
+            "is_main": False,
+            "description": "Готівкові кошти"
+        },
+        {
+            "name": "Ощадний рахунок",
+            "account_type": AccountType.SAVINGS,
+            "icon": "🏦",
+            "balance": 15000.0,
+            "is_main": False,
+            "description": "Рахунок для накопичень"
+        },
+        {
+            "name": "Кредитка",
+            "account_type": AccountType.CREDIT,
+            "icon": "💳",
+            "balance": -1200.0,  # Негативний баланс для кредитки
+            "is_main": False,
+            "description": "Кредитна картка для екстрених витрат"
+        }
+    ]
+    
+    accounts = []
+    for account_data in accounts_data:
+        account = Account(
+            user_id=user.id,
+            name=account_data["name"],
+            account_type=account_data["account_type"],
+            icon=account_data["icon"],
+            balance=account_data["balance"],
+            currency=user.currency or "UAH",
+            is_active=True,
+            is_main=account_data["is_main"],
+            description=account_data["description"]
+        )
+        session.add(account)
+        accounts.append(account)
+    
+    session.commit()
+    print(f"Додано {len(accounts)} рахунків")
+    return accounts
+
+def add_transactions_to_user(session, user, categories, accounts, num_transactions=100):
     """Додає транзакції до існуючого користувача"""
     transactions_added = 0
     
@@ -191,6 +254,32 @@ def add_transactions_to_user(session, user, categories, num_transactions=100):
         
         # Визначаємо тип транзакції
         transaction_type = TransactionType.EXPENSE if category.type == "expense" else TransactionType.INCOME
+        
+        # Вибираємо випадковий рахунок
+        # Для доходів частіше використовуємо основну картку
+        if transaction_type == TransactionType.INCOME:
+            # 70% - основна картка, 30% - інші рахунки
+            if random.random() < 0.7:
+                account = next((acc for acc in accounts if acc.is_main), random.choice(accounts))
+            else:
+                account = random.choice(accounts)
+        else:
+            # Для витрат розподіляємо більш рівномірно
+            # Готівка для малих сум, картка для великих
+            if amount < 200:
+                # Малі суми частіше з готівки
+                cash_accounts = [acc for acc in accounts if acc.account_type == AccountType.CASH]
+                if cash_accounts and random.random() < 0.6:
+                    account = random.choice(cash_accounts)
+                else:
+                    account = random.choice(accounts)
+            else:
+                # Великі суми частіше з картки
+                card_accounts = [acc for acc in accounts if acc.account_type in [AccountType.BANK_CARD, AccountType.CREDIT]]
+                if card_accounts and random.random() < 0.8:
+                    account = random.choice(card_accounts)
+                else:
+                    account = random.choice(accounts)
         
         # Генеруємо опис
         examples = TRANSACTION_EXAMPLES.get(category.name, [f"Операція {category.name}"])
@@ -202,6 +291,7 @@ def add_transactions_to_user(session, user, categories, num_transactions=100):
         transaction = Transaction(
             user_id=user.id,
             category_id=category.id,
+            account_id=account.id,  # Додаємо рахунок
             amount=amount,
             description=description,
             transaction_date=datetime.datetime.combine(transaction_date, datetime.time(
@@ -217,7 +307,7 @@ def add_transactions_to_user(session, user, categories, num_transactions=100):
         transactions_added += 1
     
     session.commit()
-    print(f"Додано {transactions_added} транзакцій")
+    print(f"Додано {transactions_added} транзакцій з прив'язкою до рахунків")
 
 def create_budget_for_user(session, user, categories):
     """Створює бюджетний план для користувача"""
@@ -376,9 +466,13 @@ def generate_data_for_user(telegram_id, num_transactions=100):
         print("\n📂 Додавання категорій...")
         categories = add_categories_to_user(session, user)
         
+        # Додаємо рахунки
+        print("\n💳 Додавання рахунків...")
+        accounts = add_accounts_to_user(session, user)
+        
         # Додаємо транзакції
         print(f"\n💰 Додавання {num_transactions} транзакцій...")
-        add_transactions_to_user(session, user, categories, num_transactions)
+        add_transactions_to_user(session, user, categories, accounts, num_transactions)
         
         # Створюємо бюджетний план
         print("\n📊 Створення бюджетного плану...")
@@ -391,10 +485,12 @@ def generate_data_for_user(telegram_id, num_transactions=100):
         # Статистика
         total_transactions = session.query(Transaction).filter_by(user_id=user.id).count()
         total_categories = session.query(Category).filter_by(user_id=user.id).count()
+        total_accounts = session.query(Account).filter_by(user_id=user.id).count()
         
         print(f"\n✅ Тестові дані успішно згенеровано!")
         print(f"   Загальна кількість транзакцій: {total_transactions}")
         print(f"   Загальна кількість категорій: {total_categories}")
+        print(f"   Загальна кількість рахунків: {total_accounts}")
         print(f"   Бюджет: {user.monthly_budget} {user.currency}")
         
     except Exception as e:
